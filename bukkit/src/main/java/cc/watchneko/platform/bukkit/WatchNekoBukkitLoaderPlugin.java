@@ -10,6 +10,7 @@ import cc.watchneko.manager.init.start.ExemptOnlinePlayersOnReload;
 import cc.watchneko.manager.init.start.StartableInitable;
 import cc.watchneko.platform.api.Platform;
 import cc.watchneko.platform.api.PlatformLoader;
+import cc.watchneko.platform.api.PlatformPlugin;
 import cc.watchneko.platform.api.PlatformServer;
 import cc.watchneko.platform.api.manager.*;
 import cc.watchneko.platform.api.player.PlatformPlayerFactory;
@@ -71,6 +72,16 @@ public final class WatchNekoBukkitLoaderPlugin extends JavaPlugin implements Pla
 
     @Override
     public void onLoad() {
+
+        PlatformPlugin grimAC = this.getPluginManager().getPlugin("GrimAC");
+        PlatformPlugin edGrim = this.getPluginManager().getPlugin("EdGrim");
+
+        if (grimAC != null || edGrim != null) {
+            this.getLogger().warning("检测到GrimAC或EdGrim，为防止冲突已关闭服务器");
+            this.getLogger().warning("GrimAC or EdGrim detected – shutting down server to avoid conflicts");
+            this.getServer().shutdown();
+        }
+
         LOADER = this;
         WatchNekoAPI.INSTANCE.load(this, this.getBukkitInitTasks());
     }
