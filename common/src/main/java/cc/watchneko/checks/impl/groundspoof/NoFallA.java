@@ -59,16 +59,16 @@ public class NoFallA extends Check implements PacketCheck {
             // I could add that feature but ehh... this works and is better anyway.
             //
             // Also flip teleports because I don't trust vanilla's handling of teleports and ground
+            if (player.packetStateData.lastPacketWasTeleport) {
+                if (shouldModifyPackets()) {
+                    wrapper.setOnGround(false);
+                    event.markForReEncode(true);
+                }
+            }
             if (flipPlayerGroundStatus) {
                 flipPlayerGroundStatus = false;
                 if (shouldModifyPackets()) {
                     wrapper.setOnGround(!wrapper.isOnGround());
-                    event.markForReEncode(true);
-                }
-            }
-            if (player.packetStateData.lastPacketWasTeleport) {
-                if (shouldModifyPackets()) {
-                    wrapper.setOnGround(false);
                     event.markForReEncode(true);
                 }
             }

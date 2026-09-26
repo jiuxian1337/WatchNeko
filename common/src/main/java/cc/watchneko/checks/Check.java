@@ -128,6 +128,14 @@ public class Check extends GrimProcessor implements AbstractCheck {
         return true;
     }
 
+    public final boolean canSetback() {
+
+        if (player.disableGrim || (experimental && !player.isExperimentalChecks()) || exemptPermission)
+            return false; // Avoid calling event if disabled
+
+        return player.punishmentManager.handleViolation(this);
+    }
+
     public final boolean flagWithSetback() {
         return flagWithSetback("");
     }
