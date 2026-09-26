@@ -53,7 +53,7 @@ bukkit {
     name = "WatchNeko"
     author = "P01_4rU5er"
     main = "cc.watchneko.platform.bukkit.WatchNekoBukkitLoaderPlugin"
-    website = "https://grim.ac/"
+    website = "https://watchneko.zkmjnic.tech"
     apiVersion = "1.13"
     foliaSupported = true
 
