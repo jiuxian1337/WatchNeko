@@ -778,7 +778,7 @@ public class CheckManagerListener extends PacketListenerAbstract {
         }
 
         // Call the packet checks last as they can modify the contents of the packet
-        // Such as the NoFall check setting the player to not be on the ground
+        // Such as the NoFallA check setting the player to not be on the ground
         player.checkManager.onPacketReceive(event);
 
         if (player.packetStateData.cancelDuplicatePacket) {

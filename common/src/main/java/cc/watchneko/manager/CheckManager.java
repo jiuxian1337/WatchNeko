@@ -20,7 +20,8 @@ import cc.watchneko.checks.impl.crash.*;
 import cc.watchneko.checks.impl.elytra.*;
 import cc.watchneko.checks.impl.exploit.ExploitA;
 import cc.watchneko.checks.impl.exploit.ExploitB;
-import cc.watchneko.checks.impl.groundspoof.NoFall;
+import cc.watchneko.checks.impl.groundspoof.NoFallA;
+import cc.watchneko.checks.impl.groundspoof.NoFallB;
 import cc.watchneko.checks.impl.interact.InteractA;
 import cc.watchneko.checks.impl.interact.InteractB;
 import cc.watchneko.checks.impl.inventory.*;
@@ -110,7 +111,7 @@ public class CheckManager {
                 .put(TeamHandler.class, new TeamHandler(player))
                 .put(ClientBrand.class, new ClientBrand(player))
                 .put(AimW.class, new AimW(player))
-                .put(NoFall.class, new NoFall(player))
+                .put(NoFallA.class, new NoFallA(player))
                 .put(ChatA.class, new ChatA(player))
                 .put(ChatB.class, new ChatB(player))
                 .put(ChatC.class, new ChatC(player))
@@ -200,6 +201,7 @@ public class CheckManager {
                 .build();
 
         postPredictionChecks = new ImmutableClassToInstanceMap.Builder<PostPredictionCheck>()
+                .put(NoFallB.class, new NoFallB(player))
                 .put(NegativeTimer.class, new NegativeTimer(player))
                 .put(VelocityB.class, new VelocityB(player))
                 .put(VelocityA.class, new VelocityA(player))
@@ -468,8 +470,8 @@ public class CheckManager {
         return packetEntityReplication;
     }
 
-    public NoFall getNoFall() {
-        return getPacketCheck(NoFall.class);
+    public NoFallA getNoFall() {
+        return getPacketCheck(NoFallA.class);
     }
 
     public VelocityA getKnockbackHandler() {

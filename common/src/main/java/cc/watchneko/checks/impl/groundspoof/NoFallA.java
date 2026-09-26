@@ -17,12 +17,12 @@ import java.util.List;
 
 // Catches NoFalls for LOOK and GROUND packets
 // This check runs AFTER the predictions
-@CheckData(name = "NoFall", setback = 10)
-public class NoFall extends Check implements PacketCheck {
+@CheckData(name = "NoFallA", setback = 10)
+public class NoFallA extends Check implements PacketCheck {
 
     public boolean flipPlayerGroundStatus = false;
 
-    public NoFall(PlayerData player) {
+    public NoFallA(PlayerData player) {
         super(player);
     }
 
@@ -52,7 +52,7 @@ public class NoFall extends Check implements PacketCheck {
 
         if (WrapperPlayClientPlayerFlying.isFlying(event.getPacketType())) {
             WrapperPlayClientPlayerFlying wrapper = new WrapperPlayClientPlayerFlying(event);
-            // The prediction based NoFall check (that runs before us without the packet)
+            // The prediction based NoFallA check (that runs before us without the packet)
             // has asked us to flip the player's onGround status
             // This happens to make both checks use the same logic... and
             // since we don't have access to modify the packet with prediction based checks

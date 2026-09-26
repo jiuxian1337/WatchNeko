@@ -58,7 +58,7 @@ public class BlockPlaceCheck extends Check implements RotationCheck, BlockBreakC
 
     @Override
     public void onReload(ConfigManager config) {
-        this.cancelVL = config.getIntElse(getConfigName() + ".cancelVL", 5);
+        this.cancelVL = config.getIntElse(getConfigName() + ".cancelvl", 5);
     }
 
     protected boolean shouldCancel() {

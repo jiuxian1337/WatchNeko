@@ -24,7 +24,7 @@ public final class InteractB extends Check implements PacketCheck {
     @Override
     public void onReload(ConfigManager config) {
         super.onReload(config);
-        this.cancelVL = config.getIntElse(getConfigName() + ".cancelVL", 0);
+        this.cancelVL = config.getIntElse(getConfigName() + ".cancelvl", 0);
     }
 
     private boolean shouldCancel() {

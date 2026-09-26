@@ -97,6 +97,10 @@ Phase:
     setbackvl: 1 # 错误的方块可以允许爬墙，加上这个检查是相对稳定的
     decay: 0.005
 
+NoFallB:
+    # 忽略传送带来的 FallDistance 重置；如果玩家莫名其妙摔伤，请改为 true 并在 GitHub 提交 issue。
+    ignore-teleport: false
+
 AirLiquidPlace:
     cancelvl: 0
 
@@ -227,9 +231,9 @@ PingSpoofC:
 PingSpoofD:
     cancelVL: 0
     # 在叠加基于 ping 的容错前，基础允许的实体待确认事务数。
-    basePendingAllowance: 8
+    base-pending-allowance: 8
     # 将基于 ping 推导出的额外容错限制为最多这么多个 50ms tick。
-    maxPingTicks: 20
+    max-ping-ticks: 20
 
 InteractA:
     cancelVL: 0

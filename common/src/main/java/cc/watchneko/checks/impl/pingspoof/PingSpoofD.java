@@ -27,8 +27,8 @@ public final class PingSpoofD extends Check implements PacketCheck {
     @Override
     public void onReload(ConfigManager config) {
         super.onReload(config);
-        this.basePendingAllowance = config.getIntElse(getConfigName() + ".basePendingAllowance", 2);
-        this.maxPingTicks = config.getIntElse(getConfigName() + ".maxPingTicks", 20);
+        this.basePendingAllowance = config.getIntElse(getConfigName() + ".base-pending-allowance", 2);
+        this.maxPingTicks = config.getIntElse(getConfigName() + ".max-ping-ticks", 20);
     }
 
     @Override

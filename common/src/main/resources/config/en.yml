@@ -93,6 +93,10 @@ Phase:
     setbackvl: 1 # Glitching into blocks can allow wall climbing, plus this check is relatively stable
     decay: 0.005
 
+NoFallB:
+    # Ignore FallDistance resets caused by teleports; if players mysteriously take fall damage, set this to true and open an issue on GitHub.
+    ignore-teleport: false
+
 AirLiquidPlace:
     cancelvl: 0
 
@@ -216,23 +220,23 @@ Reach:
 
 # Backtrack checks
 PingSpoofB:
-    cancelVL: 0
+    cancelvl: 0
 
 PingSpoofC:
-    cancelVL: 0
+    cancelvl: 0
 
 PingSpoofD:
-    cancelVL: 0
+    cancelvl: 0
     # Base number of pending entity transactions allowed before ping-based allowance is added.
-    basePendingAllowance: 8
+    base-pending-allowance: 8
     # Cap the ping-derived allowance at this many 50ms ticks.
-    maxPingTicks: 20
+    max-ping-ticks: 20
 
 InteractA:
-    cancelVL: 0
+    cancelvl: 0
 
 InteractB:
-    cancelVL: 0
+    cancelvl: 0
 
 # Autoclicker
 AutoclickerA:

@@ -86,6 +86,6 @@ public class AirLiquidPlace extends BlockPlaceCheck {
 
     @Override
     public void onReload(ConfigManager config) {
-        this.cancelVL = config.getIntElse(getConfigName() + ".cancelVL", 0);
+        this.cancelVL = config.getIntElse(getConfigName() + ".cancelvl", 0);
     }
 }

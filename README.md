@@ -3,7 +3,7 @@
 **WatchNeko** 是 [Grim](https://github.com/GrimAnticheat/Grim) 的一个分支，Grim 是自由开源的模拟式
 Minecraft 反作弊。本分支在上游 Grim 代码库之外新增了大量检测和检测模块。
 
-> **免责声明** — 本项目包含大量 AI 生成的代码（Gemini / ChatGPT）。在生产环境部署前请务必充分审查和测试。
+> **免责声明** — 本项目包含大量 AI 生成的代码。在生产环境部署前请务必充分审查和测试。
 
 ## 分支基础
 

@@ -45,7 +45,8 @@ Punishments:
         remove-violations-after: 300
         checks:
             - "GroundSpoof"
-            - "NoFall"
+            - "NoFallA"
+            - "NoFallB"
         commands:
             - "1:1 [log]"
             - "10:5 [alert]"
