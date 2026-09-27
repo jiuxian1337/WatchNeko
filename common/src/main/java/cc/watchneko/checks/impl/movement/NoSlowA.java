@@ -6,6 +6,7 @@ import cc.watchneko.checks.CheckData;
 import cc.watchneko.checks.type.PostPredictionCheck;
 import cc.watchneko.player.PlayerData;
 import cc.watchneko.utils.anticheat.update.PredictionComplete;
+import com.github.retrooper.packetevents.protocol.item.ItemStack;
 import com.github.retrooper.packetevents.protocol.player.ClientVersion;
 
 @CheckData(name = "NoSlowA (Prediction)", configName = "NoSlowA", description = "Was not slowed while using an item", setback = 0)
@@ -33,7 +34,9 @@ public class NoSlowA extends Check implements PostPredictionCheck {
             }
 
             if (buffer >= 2) {
-                if (flagAndAlertWithSetback()) {
+                ItemStack spigotItem = player.platformPlayer.getInventory().getItemInHand();
+                ItemStack grimItem = player.inventory.getHeldItem();
+                if (flagAndAlertWithSetback("bo=" + bestOffset + ", si=" + spigotItem + ", gi=" + grimItem)) {
                     player.mitigateDamage();
                     buffer = 1;
                 }

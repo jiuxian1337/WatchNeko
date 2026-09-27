@@ -6,7 +6,7 @@ BuildConfig.init(project)
 
 val baseVersion = SimpleDateFormat("yy.MM.dd").format(Date())
 group = "cc.watchneko"
-version = baseVersion
+version = baseVersion + ".2"
 description =
     "Libre simulation anticheat designed for 1.21 with 1.8-1.21 support, powered by PacketEvents 2.0."
 
