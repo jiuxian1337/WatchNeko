@@ -154,7 +154,7 @@ NoSlowA:
     # How much of an offset is "cheating"
     # By default this is lower than other offs
     # Flags by 0.03-0.2 consistently with NoSlow on
-    threshold: 0.03
+    threshold: 0.01
     # Setback fast on the first item to remove any advantage NoSlow gives
     setbackvl: 0
     # Decay's when the player uses an item AND is slowed by it

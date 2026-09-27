@@ -157,7 +157,7 @@ ScaffoldD:
 NoSlowA:
     # 有多少偏移量是作弊
     # 标志 0.03-0.2 与 NoSlow 一致
-    threshold: 0.03
+    threshold: 0.01
     # 到达多少VL时回弹
     setbackvl: 0
     # 当玩家使用一个物品并被它减慢时衰减多少VL
