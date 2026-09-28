@@ -1,6 +1,5 @@
 package cc.watchneko.checks.impl.aim.processor;
 
-import cc.watchneko.WatchNekoAPI;
 import cc.watchneko.checks.Check;
 import cc.watchneko.checks.type.RotationCheck;
 import cc.watchneko.player.PlayerData;
@@ -100,13 +99,11 @@ public final class Cinematic extends Check implements RotationCheck {
      * 更新 cinematic2 状态逻辑
      */
     private void updateCinematic2(RotationUpdate rotationUpdate, boolean cinematic2Flag) {
-        boolean allowed = WatchNekoAPI.INSTANCE.getConfigManager().getConfig().getBooleanElse("function.allowed-cinematic", false);
-        if (this.isTotallyNotCinematic > 0 || !allowed) {
-            this.isTotallyNotCinematic--;
-            rotationUpdate.setCinematic2(false);
-        } else {
-            rotationUpdate.setCinematic2(cinematic2Flag);
-        }
+        // 原 function.allowed-cinematic 配置项已移除，固定按默认值 false 处理：
+        // 原条件 `isTotallyNotCinematic > 0 || !allowed` 中 allowed 恒为 false，条件恒成立，
+        // 因此永远不判定为 cinematic2
+        this.isTotallyNotCinematic--;
+        rotationUpdate.setCinematic2(false);
     }
 
     /**
@@ -151,8 +148,8 @@ public final class Cinematic extends Check implements RotationCheck {
             cinematicTicks--;
         }
 
-        boolean allowed = WatchNekoAPI.INSTANCE.getConfigManager().getConfig().getBooleanElse("function.allowed-cinematic", false);
-        rotationUpdate.setCinematic((cinematicTicks > 2 || tick - lastCinematicTicks < 80) && allowed);
+        // 原 function.allowed-cinematic 配置项已移除，固定按默认值 false：永不判定为 cinematic
+        rotationUpdate.setCinematic(false);
 
         if (rotationUpdate.isCinematic() && cinematicTicks > 3) {
             lastCinematicTicks = tick;

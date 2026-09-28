@@ -1,6 +1,5 @@
 package cc.watchneko.checks.impl.aim.heuristic;
 
-import cc.watchneko.WatchNekoAPI;
 import cc.watchneko.checks.impl.aim.AimAA;
 import cc.watchneko.checks.impl.aim.processor.AimProcessor;
 import cc.watchneko.player.PlayerData;
@@ -32,8 +31,9 @@ public final class AimHeuristicConstantCheck implements HeuristicComponent {
         final float deltaYaw = Math.abs(Math.abs(event.getTo().getYaw()) - Math.abs(event.getFrom().getYaw()));
         final float deltaPitch = Math.abs(Math.abs(event.getTo().getPitch()) - Math.abs(event.getFrom().getPitch()));
 
-        if (event.isCinematic2() && WatchNekoAPI.INSTANCE.getConfigManager().getConfig()
-                .getBooleanElse("function.allowed-cinematic", true)) {
+        // 原 function.allowed-cinematic 配置项已移除，固定按默认值 true：
+        // 原条件为 `isCinematic2() && allowed`，allowed 恒为 true，等同于只判断 isCinematic2()
+        if (event.isCinematic2()) {
             return;
         }
 
