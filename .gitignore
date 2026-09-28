@@ -71,7 +71,7 @@ nb-configuration.xml
 ##############################
 ## Claude Code
 ##############################
-.claude/settings.local.json
+.claude/
 
 ##############################
 ## Fabric
