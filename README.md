@@ -8,14 +8,22 @@
 
 [![最新版本](https://img.shields.io/github/v/release/jiuxian1337/WatchNeko?style=flat-square&label=最新版本&color=2ea44f)](https://github.com/jiuxian1337/WatchNeko/releases/latest)
 [![Stars](https://img.shields.io/github/stars/jiuxian1337/WatchNeko?style=flat-square&label=Stars&color=yellow)](https://github.com/jiuxian1337/WatchNeko/stargazers)
+[![QQ群](https://img.shields.io/badge/QQ群-点击加入-12B7F5?style=flat-square&logo=tencentqq&logoColor=white)](https://qm.qq.com/q/3f4Touszsc)
+[![教程视频](https://img.shields.io/badge/视频教程-B站观看-FB7299?style=flat-square&logo=bilibili&logoColor=white)](https://www.bilibili.com/video/BV1pZa46cE81)
 
 ### [⬇️ 下载最新版](https://github.com/jiuxian1337/WatchNeko/releases/latest)
 
-[官方网站](https://watchneko.zkmjnic.tech) · [反馈问题](https://github.com/jiuxian1337/WatchNeko/issues/new/choose)
+[官方网站](https://watchneko.zkmjnic.tech) · [反馈问题](https://github.com/jiuxian1337/WatchNeko/issues/new/choose) · [QQ 群](https://qm.qq.com/q/3f4Touszsc) · [视频教程](https://www.bilibili.com/video/BV1pZa46cE81)
 
 </div>
 
 ---
+
+## 📺 视频教程（新手推荐先看这个）
+
+**[[免费开源] WatchNeko 反作弊使用教程](https://www.bilibili.com/video/BV1pZa46cE81)** — 从下载到装好，全程演示。
+
+> 不想看视频的话，下面有文字版。
 
 ## 🔧 装
 
@@ -312,6 +320,17 @@ Paper / Spigot / Purpur / Folia · Minecraft 1.8 – 1.21 · 手机版（基岩�
 **里面有 AI 写的代码吗？** 有，建议先测试几天再用。
 
 **要钱吗？** 不要。
+
+## 💬 遇到问题找谁
+
+| 渠道 | 适合什么 | 链接 |
+|---|---|---|
+| 📺 **视频教程** | 第一次装，不知道从哪下手 | [B 站观看](https://www.bilibili.com/video/BV1pZa46cE81) |
+| 💬 **QQ 群** | 装不上、报错、想问配置怎么写 | **[点击加入【WatchNeko】](https://qm.qq.com/q/3f4Touszsc)** |
+| 🐛 **GitHub Issue** | 确认是 bug、误判反馈（会被作者看到并修复） | [提交 Issue](https://github.com/jiuxian1337/WatchNeko/issues/new/choose) |
+| 🌐 **官方网站** | 下载、更新公告 | [watchneko.zkmjnic.tech](https://watchneko.zkmjnic.tech) |
+
+> **反馈误判时请附上 `/watchneko dump` 的输出**，否则作者没法定位。
 
 ---
 
