@@ -1,8 +1,0 @@
-{
-    "permissions": {
-        "allow": [
-            "Bash(git -C \"d:/java/plugins/Grim-2.3.72\" log --oneline -10)",
-            "Bash(git mv *)"
-        ]
-    }
-}

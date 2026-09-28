@@ -69,6 +69,11 @@ nb-configuration.xml
 .DS_Store
 
 ##############################
+## Claude Code
+##############################
+.claude/settings.local.json
+
+##############################
 ## Fabric
 ##############################
 run/

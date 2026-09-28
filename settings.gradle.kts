@@ -3,10 +3,6 @@ dependencyResolutionManagement {
         create("libs") {
             from(files("libs.versions.toml"))
         }
-
-        create("testlibs") {
-            from(files("testlibs.versions.toml"))
-        }
     }
 }
 
@@ -47,4 +43,3 @@ develocity {
 rootProject.name = "WatchNeko"
 include("common")
 include("bukkit")
-include("RotationRecorder")
