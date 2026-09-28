@@ -790,4 +790,4 @@ Reach:
 
 ---
 
-[⬅️ 返回 README](../README.md) · [punishments.yml 详解 ➡️](punishments.md)
+[⬅️ 返回 README](../README.md) · [命令详解](commands.md) · [punishments.yml 详解 ➡️](punishments.md)

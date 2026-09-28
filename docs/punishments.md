@@ -478,4 +478,4 @@ Punishments:
 
 ---
 
-[⬅️ config.yml 详解](config.md) · [messages.yml 详解 ➡️](messages.md)
+[⬅️ config.yml 详解](config.md) · [命令详解](commands.md) · [messages.yml 详解 ➡️](messages.md)

@@ -355,4 +355,4 @@ violation-content:
 
 ---
 
-[⬅️ messages.yml 详解](messages.md) · [返回 README ➡️](../README.md)
+[⬅️ messages.yml 详解](messages.md) · [命令详解](commands.md) · [返回 README ➡️](../README.md)

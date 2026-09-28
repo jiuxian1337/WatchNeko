@@ -575,4 +575,4 @@ grim-history-entry: "%prefix% &8[&7%server%&8] &c%check% &7x&c%vl% &8| &7%verbos
 
 ---
 
-[⬅️ punishments.yml 详解](punishments.md) · [discord.yml 详解 ➡️](discord.md)
+[⬅️ punishments.yml 详解](punishments.md) · [命令详解](commands.md) · [discord.yml 详解 ➡️](discord.md)
