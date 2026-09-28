@@ -176,7 +176,7 @@ VelocityA:
     max-ceiling: 4
 
 VelocityB:
-    threshold: 0.03
+    threshold: 0.0003
 
 TimerA:
     setbackvl: 10

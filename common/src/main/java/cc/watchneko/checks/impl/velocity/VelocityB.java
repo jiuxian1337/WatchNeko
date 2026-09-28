@@ -258,8 +258,8 @@ public class VelocityB extends Check implements PostPredictionCheck {
 
     @Override
     public void onReload(ConfigManager config) {
-        offsetToFlag = config.getDoubleElse("Explosion.threshold", 0.00001);
-        setbackVL = config.getDoubleElse("Explosion.setbackvl", 10);
+        offsetToFlag = config.getDoubleElse("VelocityB.threshold", 0.00001);
+        setbackVL = config.getDoubleElse("VelocityB.setbackvl", 10);
         if (setbackVL == -1) setbackVL = Double.MAX_VALUE;
     }
 
