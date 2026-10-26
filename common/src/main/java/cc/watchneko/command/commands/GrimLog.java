@@ -6,18 +6,21 @@ import cc.watchneko.manager.init.start.SuperDebug;
 import cc.watchneko.platform.api.sender.Sender;
 import cc.watchneko.utils.anticheat.LogUtil;
 import cc.watchneko.utils.anticheat.MessageUtil;
-import cc.watchneko.utils.common.GrimArguments;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.incendo.cloud.Command;
 import org.incendo.cloud.CommandManager;
 import org.incendo.cloud.context.CommandContext;
 import org.incendo.cloud.parser.standard.IntegerParser;
 
+import cc.watchneko.utils.common.PasteUpload;
+
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 public class GrimLog implements BuildableCommand {
@@ -39,31 +42,48 @@ public class GrimLog implements BuildableCommand {
     }
 
     private static void sendLog(Sender sender, String log, String success, String failure, Consumer<String> consumer, String type) throws IOException {
-        URL mUrl = new URL(GrimArguments.PASTE_URL + "data/post");
-        HttpURLConnection urlConn = (HttpURLConnection) mUrl.openConnection();
+        final URL url = new URL(PasteUpload.endpoint());
+        final byte[] body = PasteUpload.formBody(log);
+
+        final HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         try {
-            urlConn.setDoOutput(true);
-            urlConn.setRequestMethod("POST");
-            urlConn.addRequestProperty("User-Agent", "WatchNeko/" + WatchNekoAPI.INSTANCE.getExternalAPI().getGrimVersion());
-            urlConn.addRequestProperty("Content-Type", type); // Not really yaml, but looks nicer than plaintext
-            urlConn.setRequestProperty("Content-Length", Integer.toString(log.length()));
-            try (OutputStream stream = urlConn.getOutputStream()) {
-                stream.write(log.getBytes(StandardCharsets.UTF_8));
+            connection.setDoOutput(true);
+            connection.setRequestMethod("POST");
+            connection.setConnectTimeout(10_000);
+            connection.setReadTimeout(20_000);
+            connection.addRequestProperty("User-Agent", "WatchNeko/" + WatchNekoAPI.INSTANCE.getExternalAPI().getGrimVersion());
+            connection.addRequestProperty("Content-Type", type);
+            // Byte length, not String.length(): UTF-8 Chinese is several bytes per char, and a short
+            // Content-Length makes the upload fail with "too many bytes written".
+            connection.setFixedLengthStreamingMode(body.length);
+            try (OutputStream stream = connection.getOutputStream()) {
+                stream.write(body);
             }
-            final int response = urlConn.getResponseCode();
-            if (response == HttpURLConnection.HTTP_CREATED) {
-                String responseURL = urlConn.getHeaderField("Location");
-                String message = success.replace("%url%", GrimArguments.PASTE_URL + responseURL);
+
+            final int response = connection.getResponseCode();
+            final Optional<String> uploaded = PasteUpload.parseReply(response, readAll(connection, response));
+            if (uploaded.isPresent()) {
+                String message = success.replace("%url%", uploaded.get());
                 consumer.accept(message);
                 message = MessageUtil.replacePlaceholders(sender, message);
                 sender.sendMessage(MessageUtil.miniMessage(message));
             } else {
                 String message = MessageUtil.replacePlaceholders(sender, failure);
                 sender.sendMessage(MessageUtil.miniMessage(message));
-                LogUtil.error("Returned response code " + response + ": " + urlConn.getResponseMessage());
+                LogUtil.error("Paste upload to " + url + " failed with response code " + response);
             }
         } finally {
-            urlConn.disconnect();
+            connection.disconnect();
+        }
+    }
+
+    private static String readAll(final HttpURLConnection connection, final int response) throws IOException {
+        final InputStream stream = response >= 400 ? connection.getErrorStream() : connection.getInputStream();
+        if (stream == null) {
+            return "";
+        }
+        try (InputStream in = stream) {
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
         }
     }
 

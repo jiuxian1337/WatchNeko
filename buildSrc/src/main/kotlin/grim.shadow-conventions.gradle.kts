@@ -6,7 +6,13 @@ plugins {
 }
 
 tasks.named<ShadowJar>("shadowJar") {
-    minimize()
+    // Minimization is off on purpose. Shadow's dependency analyzer only follows bytecode references, so
+    // classes that exist to be discovered through META-INF/services are deleted while their service file
+    // survives. Adventure's DataComponentValueConverter providers are exactly that, and the missing class
+    // aborts plugin startup on 26.2 with a ServiceConfigurationError. `minimize { exclude(...) }` does not
+    // rescue them in Shadow 9.0.0-rc2, and R8 minimization (which does keep service providers) needs a
+    // newer Shadow than this build's Kotlin supports. A jar a few megabytes larger beats one that does not
+    // start; revisit when the toolchain moves.
     archiveFileName = "${rootProject.name}-${project.name}-${rootProject.version}.jar"
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 

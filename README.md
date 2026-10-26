@@ -4,7 +4,7 @@
 
 **Minecraft 反作弊插件 · 装上就能抓外挂**
 
-**支持 1.8 – 1.21 · 中文 · 免费**
+**支持 1.8 – 26.2 · 中文 · 免费**
 
 [![最新版本](https://img.shields.io/github/v/release/jiuxian1337/WatchNeko?style=flat-square&label=最新版本&color=2ea44f)](https://github.com/jiuxian1337/WatchNeko/releases/latest)
 [![Stars](https://img.shields.io/github/stars/jiuxian1337/WatchNeko?style=flat-square&label=Stars&color=yellow)](https://github.com/jiuxian1337/WatchNeko/stargazers)
@@ -87,7 +87,7 @@
 
 ## 🖥️ 支持
 
-Paper / Spigot / Purpur / Folia · Minecraft 1.8 – 1.21 · 手机版（基岩版）服务器
+Paper / Spigot / Purpur / Folia · Minecraft 1.8 – 26.2 · 手机版（基岩版）服务器
 
 ## ⚙️ 配置文件详解
 
@@ -140,7 +140,7 @@ Paper / Spigot / Purpur / Folia · Minecraft 1.8 – 1.21 · 手机版（基岩�
 <details>
 <summary><b>English</b></summary>
 
-**WatchNeko** — a free Minecraft anticheat for Paper / Spigot / Folia, supporting **1.8 – 1.21**.
+**WatchNeko** — a free Minecraft anticheat for Paper / Spigot / Folia, supporting **1.8 – 26.2**.
 
 Catches **170+ cheats**: Killaura, AimBot, Reach, Scaffold, Fly, Speed, NoFall, Timer, ElytraFly and more. It never bans — it alerts you and kicks players past a threshold, all configurable in `punishments.yml`.
 
