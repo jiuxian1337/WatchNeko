@@ -373,4 +373,4 @@ history:
 
 
 # 不要修改这一行：插件启动时会把这里写成当前版本的编号。
-config-version: 12
+config-version: 10
