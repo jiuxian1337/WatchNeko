@@ -81,7 +81,7 @@ public class ConfigManagerFileImpl implements ConfigManager, BasicReloadable {
 
                     configVersion = Integer.parseInt(configStringVersion);
                     // TODO: Do we have to hardcode this?
-                    configString = configString.replaceAll("config-version: " + configStringVersion, "config-version: 11");
+                    configString = configString.replaceAll("config-version: " + configStringVersion, "config-version: 12");
                     Files.write(config.toPath(), configString.getBytes());
 
                     upgradeModernConfig(config, configString, configVersion);
@@ -129,6 +129,23 @@ public class ConfigManagerFileImpl implements ConfigManager, BasicReloadable {
         if (configVersion < 11) {
             addTransactionSkipLimit(config, configString);
         }
+        if (configVersion < 12) {
+            addPredictionFeatureToggles(config, configString);
+        }
+    }
+
+    private void addPredictionFeatureToggles(File config, String configString) throws IOException {
+        configString += "\n\n\n" +
+                "# Per-player prediction toggles. These are the config-level defaults; a plugin API caller can override\n" +
+                "# them per player at runtime.\n" +
+                "# Exempt gliding players from the movement prediction (useful for servers with custom elytra plugins)\n" +
+                "exempt-elytra: false\n" +
+                "# Keep simulating stuck speed even when the client claims it is not stuck\n" +
+                "force-stuck-speed: true\n" +
+                "# Keep simulating slowed movement even when the client claims it is not slowed\n" +
+                "force-slow-movement: true";
+
+        Files.write(config.toPath(), configString.getBytes());
     }
 
     private void addTransactionSkipLimit(File config, String configString) throws IOException {

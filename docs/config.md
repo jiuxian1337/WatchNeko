@@ -6,7 +6,7 @@
 
 改完之后输入 `/watchneko reload` 生效（**数据库设置除外**，那个必须重启服务器）。
 
-> ⚠️ 文件末尾有一行 `config-version: 11`，**不要动它**。插件靠这个数字判断你的配置是不是旧版本，需要时自动升级。
+> ⚠️ 文件末尾有一行 `config-version: 12`，**不要动它**。插件靠这个数字判断你的配置是不是旧版本，需要时自动升级。
 
 ---
 
@@ -24,6 +24,7 @@
 - [exploit — 漏洞缓解](#exploit--漏洞缓解)
 - [AnalysisA — 云端旋转检测](#analysisa--云端旋转检测)
 - [实验性检查](#实验性检查)
+- [移动预测开关](#移动预测开关)
 - [物品使用重置](#物品使用重置)
 - [数据包限制](#数据包限制)
 - [飞行与鞘翅的延迟限制](#飞行与鞘翅的延迟限制)
@@ -469,7 +470,7 @@ VelocityA:
     max-ceiling: 4
 VelocityB:
     threshold: 0.0003
-    # setbackvl 没写就默认 10
+    setbackvl: 10
 ```
 
 | 设置 | 说明 |
@@ -704,6 +705,31 @@ experimental-checks: false
 实验性检测在提醒里会带一个 `*` 号（符号可以在 `messages.yml` 的 `experimental-symbol` 里改）。
 
 > ⚠️ **实验性检测误报率可能较高**。开之前建议先配合 `verbose` 模式观察一段时间。
+
+---
+
+## 移动预测开关
+
+```yaml
+exempt-elytra: false
+force-stuck-speed: true
+force-slow-movement: true
+```
+
+| 设置 | 默认 | 说明 |
+|---|---|---|
+| `exempt-elytra` | `false` | 为 `true` 时，滑翔中的玩家完全不做移动预测 |
+| `force-stuck-speed` | `true` | 即使客户端声称没卡住，也按卡住速度模拟 |
+| `force-slow-movement` | `true` | 即使客户端声称没被减速，也按减速后的速度模拟 |
+
+这三项是**全局默认值**，插件 API 调用方可以在运行时按玩家覆盖。它们没有对应的游戏内命令。
+
+**什么时候要动**：
+
+- 装了自定义鞘翅插件（改变滑翔速度），玩家滑翔时频繁被拉回 → 试 `exempt-elytra: true`，代价是滑翔状态下的移动不再被检测。
+- 服务器有自定义的蛛网/减速方块，玩家站上去就误判 → 把 `force-stuck-speed` / `force-slow-movement` 关掉，代价是对应的加速类外挂（NoSlow、FastStuck）失去防护。
+
+> ⚠️ 后两项**默认开启是刻意的**。关掉等于信任客户端自报的减速状态，而外挂正是靠伪造这个状态来加速。除非确定是插件冲突，否则别关。
 
 ---
 

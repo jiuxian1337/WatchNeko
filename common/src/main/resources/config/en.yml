@@ -177,6 +177,8 @@ VelocityA:
 
 VelocityB:
     threshold: 0.0003
+    # Violations before a setback is applied. -1 disables setback (defaults to 10 when omitted)
+    setbackvl: 10
 
 TimerA:
     setbackvl: 10
@@ -321,6 +323,15 @@ debug-pipeline-on-join: false
 # Enables experimental checks
 experimental-checks: false
 
+# Per-player prediction toggles. These are the config-level defaults; a plugin API caller can override
+# them per player at runtime.
+# Exempt gliding players from the movement prediction (useful for servers with custom elytra plugins)
+exempt-elytra: false
+# Keep simulating stuck speed even when the client claims it is not stuck
+force-stuck-speed: true
+# Keep simulating slowed movement even when the client claims it is not slowed
+force-slow-movement: true
+
 reset-item-usage-on-item-update: true
 reset-item-usage-on-attack: true
 reset-item-usage-on-slot-change: true
@@ -361,4 +372,4 @@ history:
         username: root
         password: ""
 
-config-version: 11
+config-version: 12

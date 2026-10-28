@@ -66,7 +66,12 @@ public class GhostBlockMitigation extends BlockPlaceCheck {
     @Override
     public void onReload(ConfigManager config) {
         allow = config.getBooleanElse("exploit.allow-building-on-ghostblocks", true);
-        distance = config.getIntElse("exploit.distance-to-check-for-ghostblocks", 2);
+        // The key was misspelled here for a long time ("for" vs the "if" the configs ship), so the
+        // shipped value was never read and every server silently ran on the default. Read the shipped
+        // spelling first and keep the old one as a fallback for anyone who already edited it.
+        int configured = config.getIntElse("exploit.distance-to-check-if-ghostblocks",
+                config.getIntElse("exploit.distance-to-check-for-ghostblocks", 2));
+        distance = configured;
 
         if (distance < 2 || distance > 4) distance = 2;
     }

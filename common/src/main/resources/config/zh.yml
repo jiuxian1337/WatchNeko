@@ -180,6 +180,8 @@ VelocityA:
 
 VelocityB:
     threshold: 0.0003
+    # 违规多少次后拉回；-1 表示不拉回（不写时默认 10）
+    setbackvl: 10
 
 TimerA:
     setbackvl: 10
@@ -223,23 +225,23 @@ Reach:
 
 # Backtrack检测
 PingSpoofB:
-    cancelVL: 0
+    cancelvl: 0
 
 PingSpoofC:
-    cancelVL: 0
+    cancelvl: 0
 
 PingSpoofD:
-    cancelVL: 0
+    cancelvl: 0
     # 在叠加基于 ping 的容错前，基础允许的实体待确认事务数。
     base-pending-allowance: 8
     # 将基于 ping 推导出的额外容错限制为最多这么多个 50ms tick。
     max-ping-ticks: 20
 
 InteractA:
-    cancelVL: 0
+    cancelvl: 0
 
 InteractB:
-    cancelVL: 0
+    cancelvl: 0
 
 # 连点器
 AutoclickerA:
@@ -319,6 +321,14 @@ debug-pipeline-on-join: false
 # 启用实验性检查
 experimental-checks: false
 
+# 移动预测的全局开关。插件 API 调用方可以在运行时按玩家覆盖。
+# 对滑翔中的玩家豁免移动预测（适合装了自定义鞘翅插件的服务器）
+exempt-elytra: false
+# 即使客户端声称没有卡住，也继续按卡住速度模拟
+force-stuck-speed: true
+# 即使客户端声称没有被减速，也继续按减速后的移动模拟
+force-slow-movement: true
+
 # 取消有问题的格挡
 reset-item-usage-on-item-update: true
 reset-item-usage-on-attack: true
@@ -364,4 +374,4 @@ history:
         password: ""
 
 # 不要调整这个
-config-version: 11
+config-version: 12
