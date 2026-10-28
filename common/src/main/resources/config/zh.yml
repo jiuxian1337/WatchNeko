@@ -373,5 +373,3 @@ history:
         username: root
         password: ""
 
-# 不要调整这个
-config-version: 12

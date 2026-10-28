@@ -101,7 +101,7 @@ flag 链路：`Check.flag()` → `FlagEvent`（可取消）→ `PunishmentManage
 
 `configuralize` 的 `DynamicConfig` 加载 4 个文件（`config.yml`、`messages.yml`、`punishments.yml`、`discord.yml`），默认值来自 `common/src/main/resources/{config,messages,punishments,discord}/{en,zh}.yml`，按 `user.language` 系统属性选语言，缺失回退英文。改配置键要同时改 en / zh 两份资源与 `docs/config.md`。
 
-**新增配置键还要改老服升级路径**：已存在的 `config.yml` 不会被默认值覆盖，`ConfigManagerFileImpl` 靠文件末尾的 `config-version` 做增量迁移（当前是 `10`）。新键必须同时做三件事：改资源文件、加一个 `if (configVersion < N)` 迁移方法（把带注释的 YAML 片段追加到文件）、把写死的版本号加一。漏掉迁移，老服务器永远拿不到这个键。
+**没有版本迁移机制**（曾有一套 `config-version` 迁移代码，但 `upgrade()` 从未被调用，已于 2026-10-28 删除）。`saveAllDefaults(false)` 只在文件不存在时写出默认文件，已存在的文件一个字节都不会改。所以新增配置键只对**新装的服务器**可见；老服务器靠代码里的 `getXxxElse` 默认值运行，用户看不到、也改不了这个键。要改变这一点需要引入真正的 schema 化更新器，不要重新加一套"往文件末尾追加 YAML"的迁移。
 
 `/watchneko reload` → `WatchNekoExternalAPI.reloadAsync()` → 依次重载各 manager、重建 `CloudGateway`、再让在线玩家重载自己的 checks。数据库设置在文档里标注为需重启。
 
