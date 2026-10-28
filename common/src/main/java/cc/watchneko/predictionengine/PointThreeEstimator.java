@@ -158,9 +158,7 @@ public class PointThreeEstimator {
             isNearFluid = true;
         }
 
-        if (pointThreeBox.isIntersected(new SimpleCollisionBox(x, y, z))) {
-            VelocityA velocityA = player.checkManager.getKnockbackHandler();
-            if (!velocityA.interacted) {
+        if (pointThreeBox.isIntersected(new SimpleCollisionBox(x, y, z)) && !data.isNull()) {
                 // https://github.com/MWHunter/Grim/issues/613
                 int controllingEntityId = player.inVehicle() ? player.getRidingVehicleId() : player.entityID;
 
@@ -187,7 +185,6 @@ public class PointThreeEstimator {
                     player.likelyKB = oldLikelyKB;
                     player.firstBreadExplosion = oldFirstBreadEx;
                     player.likelyExplosions = oldLikelyEx;
-                }
             }
         }
 

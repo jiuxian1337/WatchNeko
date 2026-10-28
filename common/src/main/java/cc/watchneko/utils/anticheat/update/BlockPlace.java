@@ -598,8 +598,6 @@ public class BlockPlace {
         }
 
         player.inventory.onBlockPlace(this);
-        VelocityA velocityA = player.checkManager.getKnockbackHandler();
-        velocityA.interacted = true;
         player.compensatedWorld.updateBlock(position.getX(), position.getY(), position.getZ(), state.getGlobalId());
     }
 

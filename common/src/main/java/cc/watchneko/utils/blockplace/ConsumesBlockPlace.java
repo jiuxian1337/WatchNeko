@@ -20,8 +20,6 @@ import org.jetbrains.annotations.NotNull;
 @UtilityClass
 public class ConsumesBlockPlace {
     public static boolean consumesPlace(@NotNull PlayerData player, @NotNull WrappedBlockState state, @NotNull BlockPlace place) {
-        VelocityA velocityA = player.checkManager.getKnockbackHandler();
-        velocityA.interacted = true;
         // Hey look, it's another DESYNC MOJANG
         if (state.getType() == StateTypes.BELL) {
             return goodBellHit(state, place);

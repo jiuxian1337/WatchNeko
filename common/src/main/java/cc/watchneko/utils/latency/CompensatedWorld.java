@@ -280,7 +280,8 @@ public class CompensatedWorld {
         if (column != null) {
             if (column.chunks().length <= (offsetY >> 4) || (offsetY >> 4) < 0) return;
 
-            BaseChunk chunk = column.chunks()[offsetY >> 4];
+            int sectionIndex = offsetY >> 4;
+            BaseChunk chunk = column.chunks()[sectionIndex];
 
             if (chunk == null) {
                 chunk = create();
@@ -292,15 +293,25 @@ public class CompensatedWorld {
                 chunk.set(null, 0, 0, 0, 0);
             }
 
-            // The method also gets called for the previous state before replacement
-            player.pointThreeEstimator.handleChangeBlock(x, y, z, chunk.get(blockVersion, x & 0xF, offsetY & 0xF, z & 0xF));
+            WrappedBlockState previousState = chunk.get(blockVersion, x & 0xF, offsetY & 0xF, z & 0xF);
+            WrappedBlockState newState = WrappedBlockState.getByGlobalId(blockVersion, combinedID);
 
-            chunk.set(null, x & 0xF, offsetY & 0xF, z & 0xF, combinedID);
+            // A resync that rewrites the same block is not a change.
+            // Treating it as one would hand out the wall-hit exemption, a point-three
+            // recalculation and a geyser update for free, so only process real changes.
+            if (previousState.getGlobalId() != combinedID) {
+                // The method also gets called for the previous state before replacement
+                player.pointThreeEstimator.handleChangeBlock(x, y, z, previousState);
 
-            // Handle stupidity such as fluids changing in idle ticks.
-            player.pointThreeEstimator.handleChangeBlock(x, y, z, WrappedBlockState.getByGlobalId(blockVersion, combinedID));
+                // Copy-on-write: never mutate a shared section in place
+                chunk.set(null, x & 0xF, offsetY & 0xF, z & 0xF, combinedID);
+
+                // Handle stupidity such as fluids changing in idle ticks.
+                player.pointThreeEstimator.handleChangeBlock(x, y, z, newState);
+            }
         }
     }
+
 
     public void tickOpenable(int blockX, int blockY, int blockZ) {
         final WrappedBlockState data = getBlock(blockX, blockY, blockZ);
