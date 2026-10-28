@@ -244,7 +244,9 @@ public class PlayerData implements GrimUser {
     public long lastBlockBreak = 0;
     public MainSupportingBlockData mainSupportingBlockData = new MainSupportingBlockData(null, false);
     public int totalFlyingPacketsSent;
-    /** Ordered rotation-update stream plus the attack signal anchored in it. */
+    /**
+     * Ordered rotation-update stream plus the attack signal anchored in it.
+     */
     public final RotationSequence rotationSequence = new RotationSequence();
     public boolean serverOpenedInventoryThisTick;
     public boolean hasInventoryOpen;
@@ -272,6 +274,7 @@ public class PlayerData implements GrimUser {
     // start config
     private boolean debugPacketCancel = false;
     private int spamThreshold = 100;
+    private int tranSkipThreshold = 50;
     private int maxTransactionTime = 60;
     @Getter
     private boolean ignoreDuplicatePacketRotation = false;
@@ -436,8 +439,15 @@ public class PlayerData implements GrimUser {
             if (viaPacketTracker != null)
                 viaPacketTracker.setIntervalPackets(viaPacketTracker.getIntervalPackets() - 1);
 
-            if (skipped > 0 && System.currentTimeMillis() - joinTime > 5000)
+            if (skipped > 0 && System.currentTimeMillis() - joinTime > 5000) {
                 checkManager.getCheck(TransactionOrder.class).flagAndAlert("skipped: " + skipped);
+                // 一些滥用延迟补偿的绕过修复
+                // 比如某客户端的Grim NoXZ velocity (这实际是lag velocity)
+                // TODO: 可配置这个
+                if (skipped > tranSkipThreshold) {
+                    disconnect(Component.text("invalid skip packet s= " + skipped));
+                }
+            }
 
             do {
                 data = transactionsSent.poll();
@@ -1000,6 +1010,7 @@ public class PlayerData implements GrimUser {
         featureManager.onReload(config);
         debugPacketCancel = config.getBooleanElse("debug-packet-cancel", false);
         spamThreshold = config.getIntElse("packet-spam-threshold", 100);
+        tranSkipThreshold = config.getIntElse("transaction-skip-limit", 50);
         maxTransactionTime = GrimMath.clamp(config.getIntElse("max-transaction-time", 60), 1, 180);
         ignoreDuplicatePacketRotation = config.getBooleanElse("ignore-duplicate-packet-rotation", false);
         cancelDuplicatePacket = config.getBooleanElse("cancel-duplicate-packet", true);
