@@ -80,7 +80,7 @@ public class Timer extends Check implements PacketCheck {
                 }
 
                 if (shouldSetback()) {
-                    player.getSetbackTeleportUtil().executeNonSimulatingSetback();
+                    player.getSetbackTeleportUtil().executeForceResync();
                 }
             }
 
