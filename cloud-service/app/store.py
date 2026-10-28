@@ -17,7 +17,29 @@ from datetime import datetime, timedelta, timezone
 
 DEFAULT_RETENTION_DAYS = 90
 
-_SCHEMA = """
+
+def _join_names(names: list[str]) -> str:
+    """The player names of a batch as one column value.
+
+    JSON rather than a delimiter: a name can contain anything, and a delimiter that a name can contain
+    turns one player into two. Empty is stored as an empty string so old rows (which have none) and a
+    batch with no names read back the same way.
+    """
+    return json.dumps(sorted(set(names))) if names else ""
+
+
+def _split_names(value: str | None) -> list[str]:
+    if not value:
+        return []
+    try:
+        decoded = json.loads(value)
+    except ValueError:
+        # A row written by something other than _join_names is not worth crashing a console page over.
+        return []
+    return [str(name) for name in decoded] if isinstance(decoded, list) else []
+
+
+_TABLES = """
 CREATE TABLE IF NOT EXISTS recording_sessions (
     tenant_id TEXT NOT NULL,
     session_id TEXT NOT NULL,
@@ -27,6 +49,7 @@ CREATE TABLE IF NOT EXISTS recording_sessions (
     accepted INTEGER NOT NULL,
     rejected INTEGER NOT NULL,
     undone_at TEXT,
+    players TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (tenant_id, session_id)
 );
 
@@ -39,7 +62,15 @@ CREATE TABLE IF NOT EXISTS samples (
     recorded_at TEXT NOT NULL,
     PRIMARY KEY (tenant_id, sample_id)
 );
+"""
 
+#: Indexes are created *after* the migrations, never before.
+#:
+#: ``IF NOT EXISTS`` tests the index name, not its columns, so creating ``samples_by_player`` over
+#: ``player_name`` on a table that still has ``player_hash`` fails to resolve the column and aborts
+#: startup — on exactly the databases the migration exists for. Splitting the two is what keeps that
+#: ordering true by construction rather than by a comment someone can edit away.
+_INDEXES = """
 CREATE INDEX IF NOT EXISTS samples_by_player ON samples (tenant_id, player_name);
 CREATE INDEX IF NOT EXISTS samples_by_time ON samples (recorded_at);
 """
@@ -52,22 +83,34 @@ class SampleStore:
         if retention_days < 1:
             raise ValueError("retention_days must be positive")
         self._connection = sqlite3.connect(path, check_same_thread=False)
-        self._connection.executescript(_SCHEMA)
+        # Order is load-bearing: tables, then migrations, then indexes. An index over a column a
+        # migration is about to create would abort the whole startup on an old database.
+        self._connection.executescript(_TABLES)
         self._migrate()
+        self._connection.executescript(_INDEXES)
         self._retention_days = retention_days
 
     def _migrate(self) -> None:
         """Bring a database written by an older release up to the current schema.
 
         ``CREATE TABLE IF NOT EXISTS`` leaves an existing table alone, so anything added later has to be
-        applied explicitly. Two migrations so far:
+        applied explicitly. Three migrations so far:
 
         * ``recording_sessions.undone_at`` — nullable, so adding it to an existing table loses nothing.
+        * ``recording_sessions.players`` — the distinct player names of a batch, so the upload history can
+          still say who was in it after the samples are deleted. Existing rows default to empty.
         * ``samples.player_hash`` -> ``samples.player_name`` — the identity model changed from a salted
           hash to a plain name. A hash cannot be turned back into a name, so the old sample rows are
           dropped: keeping them under a placeholder name would make them impossible to attribute or
           delete by name, and they would silently enter the next dataset. The session rows survive, so the
           upload history still shows that those uploads happened and that their samples are gone.
+
+        Every step is conditional on the column actually being absent, so this is a no-op on a database
+        that is already current — which is what makes running it on every startup safe.
+
+        ``RENAME COLUMN`` (SQLite 3.25+, and Python 3.11 bundles 3.37) is used rather than rebuilding the
+        table: it rewrites the index definitions along with the column, keeps the primary key, and cannot
+        lose the table to a crash between a ``DROP`` and a ``RENAME``.
         """
         session_columns = {
             row[1] for row in self._connection.execute("PRAGMA table_info(recording_sessions)")
@@ -78,25 +121,22 @@ class SampleStore:
             if "undone_at" not in session_columns:
                 self._connection.execute("ALTER TABLE recording_sessions ADD COLUMN undone_at TEXT")
 
-            if "player_hash" in sample_columns and "player_name" not in sample_columns:
-                self._connection.executescript(
-                    """
-                    DROP TABLE IF EXISTS samples_new;
-                    CREATE TABLE samples_new (
-                        tenant_id TEXT NOT NULL,
-                        sample_id TEXT NOT NULL,
-                        session_id TEXT NOT NULL,
-                        player_name TEXT NOT NULL,
-                        features TEXT NOT NULL,
-                        recorded_at TEXT NOT NULL,
-                        PRIMARY KEY (tenant_id, sample_id)
-                    );
-                    DROP TABLE samples;
-                    ALTER TABLE samples_new RENAME TO samples;
-                    CREATE INDEX IF NOT EXISTS samples_by_player ON samples (tenant_id, player_name);
-                    CREATE INDEX IF NOT EXISTS samples_by_time ON samples (recorded_at);
-                    """
+            if "players" not in session_columns:
+                self._connection.execute(
+                    "ALTER TABLE recording_sessions ADD COLUMN players TEXT NOT NULL DEFAULT ''"
                 )
+
+            if "player_hash" in sample_columns and "player_name" not in sample_columns:
+                # The rows are dropped before the rename, not after: an old row's hash cannot be turned
+                # into a name, and a sample nobody can attribute is one nobody can delete on request.
+                self._connection.execute("DELETE FROM samples")
+                self._connection.execute(
+                    "ALTER TABLE samples RENAME COLUMN player_hash TO player_name"
+                )
+
+            # A migration that died part-way through the earlier rebuild-based implementation can leave
+            # this behind. It holds nothing worth keeping and would otherwise shadow the real table name.
+            self._connection.execute("DROP TABLE IF EXISTS samples_new")
 
     @property
     def retention_days(self) -> int:
@@ -140,21 +180,42 @@ class SampleStore:
                 else:
                     rejected += 1
 
+            # The names are recorded on the session row, not read back from the samples: undoing a batch
+            # deletes its samples, and the history still has to say who was in it. A re-upload of the same
+            # session id is the same batch continued, so its names join the record rather than replace it.
+            names = sorted({str(sample["player_name"]) for sample in samples})
+            previous = self._session_names(tenant_id, session_id)
+            merged = sorted(set(previous) | set(names))
+
             # ON CONFLICT rather than INSERT OR REPLACE: REPLACE deletes and re-inserts the row, which
             # would silently clear undone_at and make an undone upload look live again.
+            #
+            # `undone_at` follows what is actually in the store. Samples that were undone and then
+            # re-uploaded are live data again, and the console must be able to undo them a second time;
+            # an upload that only contributed duplicates changes nothing and keeps the marker.
             self._connection.execute(
                 "INSERT INTO recording_sessions"
-                " (tenant_id, session_id, server_id, label, created_at, accepted, rejected)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?)"
+                " (tenant_id, session_id, server_id, label, created_at, accepted, rejected, players)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
                 " ON CONFLICT(tenant_id, session_id) DO UPDATE SET"
                 " server_id = excluded.server_id,"
                 " label = excluded.label,"
-                " accepted = excluded.accepted,"
-                " rejected = excluded.rejected",
-                (tenant_id, session_id, server_id, label, stamp, accepted, rejected),
+                " accepted = recording_sessions.accepted + excluded.accepted,"
+                " rejected = recording_sessions.rejected + excluded.rejected,"
+                " players = excluded.players,"
+                " undone_at = CASE WHEN excluded.accepted > 0 THEN NULL"
+                " ELSE recording_sessions.undone_at END",
+                (tenant_id, session_id, server_id, label, stamp, accepted, rejected, _join_names(merged)),
             )
 
         return accepted, rejected
+
+    def _session_names(self, tenant_id: str, session_id: str) -> list[str]:
+        row = self._connection.execute(
+            "SELECT players FROM recording_sessions WHERE tenant_id = ? AND session_id = ?",
+            (tenant_id, session_id),
+        ).fetchone()
+        return _split_names(row[0]) if row is not None else []
 
     def sample_count(self, tenant_id: str | None = None) -> int:
         if tenant_id is None:
@@ -214,10 +275,11 @@ class SampleStore:
 
         One row per recording session. ``remaining`` is what is still in the store, so an upload that
         has been undone stays visible (``remaining == 0``) instead of silently vanishing from history.
+        ``players`` is read from the session row, so it survives the samples being deleted.
         """
         query = (
             "SELECT s.tenant_id, s.session_id, s.server_id, s.label, s.created_at,"
-            " s.accepted, s.rejected, s.undone_at,"
+            " s.accepted, s.rejected, s.undone_at, s.players,"
             " (SELECT COUNT(*) FROM samples x"
             "  WHERE x.tenant_id = s.tenant_id AND x.session_id = s.session_id) AS remaining"
             " FROM recording_sessions s"
@@ -238,19 +300,11 @@ class SampleStore:
                 "accepted": int(row[5]),
                 "rejected": int(row[6]),
                 "undone_at": row[7],
-                "remaining": int(row[8]),
+                "players": _split_names(row[8]),
+                "remaining": int(row[9]),
             }
             for row in self._connection.execute(query, params).fetchall()
         ]
-
-    def players_of_session(self, tenant_id: str, session_id: str) -> list[str]:
-        """The distinct player names inside one upload, for the history view."""
-        rows = self._connection.execute(
-            "SELECT DISTINCT player_name FROM samples"
-            " WHERE tenant_id = ? AND session_id = ? ORDER BY player_name",
-            (tenant_id, session_id),
-        ).fetchall()
-        return [str(row[0]) for row in rows]
 
     def undo_upload(self, tenant_id: str, session_id: str, now: datetime | None = None) -> int:
         """Delete one upload's samples, leaving the session row as a tombstone.
@@ -259,6 +313,10 @@ class SampleStore:
         that it was undone. The samples go, which is what takes them out of the next dataset. Models
         already trained on them are deliberately not touched: rolling a model back is a separate,
         explicit decision.
+
+        The marker is written even when there was nothing left to delete: retention can empty a batch
+        before anyone gets round to undoing it, and an undo that reported zero and marked nothing would
+        leave a live-looking button that never does anything.
         """
         stamp = (now or datetime.now(timezone.utc)).isoformat()
         with self._connection:
@@ -266,12 +324,11 @@ class SampleStore:
                 "DELETE FROM samples WHERE tenant_id = ? AND session_id = ?",
                 (tenant_id, session_id),
             )
-            if cursor.rowcount:
-                self._connection.execute(
-                    "UPDATE recording_sessions SET undone_at = ?"
-                    " WHERE tenant_id = ? AND session_id = ?",
-                    (stamp, tenant_id, session_id),
-                )
+            self._connection.execute(
+                "UPDATE recording_sessions SET undone_at = ?"
+                " WHERE tenant_id = ? AND session_id = ?",
+                (stamp, tenant_id, session_id),
+            )
         return int(cursor.rowcount)
 
     def purge_expired(self, now: datetime | None = None) -> int:

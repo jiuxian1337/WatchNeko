@@ -50,6 +50,15 @@ class AdminAuth:
     def configured_secret(self) -> bool:
         return True
 
+    @property
+    def session_ttl_seconds(self) -> int:
+        """How long a session lasts, so the cookie's lifetime can match the token's.
+
+        They used to be written separately — the token from this setting, the cookie from a literal —
+        which meant changing ``admin.session_hours`` left the cookie outliving the token.
+        """
+        return self._ttl
+
     def login(self, username: str, password: str) -> str | None:
         """The session token, or ``None`` when the credentials do not match.
 

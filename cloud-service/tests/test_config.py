@@ -70,10 +70,13 @@ def test_a_relative_database_path_resolves_next_to_the_config(tmp_path: Path) ->
 
 
 def test_an_absolute_database_path_is_left_alone(tmp_path: Path) -> None:
+    # `tmp_path` is absolute on every platform; a literal POSIX path is not absolute on Windows, so
+    # using one here would test the platform rather than the resolver.
+    absolute = tmp_path / "elsewhere" / "wn.db"
     path = tmp_path / "config.yaml"
-    path.write_text(yaml.safe_dump({"database": {"path": "/var/lib/wn.db"}}), encoding="utf-8")
+    path.write_text(yaml.safe_dump({"database": {"path": str(absolute)}}), encoding="utf-8")
 
-    assert load(path).database_path == "/var/lib/wn.db"
+    assert load(path).database_path == str(absolute)
 
 
 def test_a_partial_config_falls_back_to_defaults(tmp_path: Path) -> None:
@@ -86,6 +89,18 @@ def test_a_partial_config_falls_back_to_defaults(tmp_path: Path) -> None:
     assert settings.retention_days == 90
     assert settings.trainer == "logistic"
     assert settings.admin_password == "pw"
+
+
+def test_the_in_memory_database_name_is_not_treated_as_a_path(tmp_path: Path) -> None:
+    """``:memory:`` is SQLite's name for an anonymous database, not a filename.
+
+    Resolving it against the config directory — which is what happens to every other relative value —
+    produces a path to a file literally called ``:memory:``, and the service then fails to open it.
+    """
+    path = tmp_path / "config.yaml"
+    path.write_text(yaml.safe_dump({"database": {"path": ":memory:"}}), encoding="utf-8")
+
+    assert load(path).database_path == ":memory:"
 
 
 def test_an_empty_file_is_valid_and_means_all_defaults(tmp_path: Path) -> None:

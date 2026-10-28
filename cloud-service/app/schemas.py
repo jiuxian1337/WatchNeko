@@ -34,8 +34,11 @@ class Sample(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    sample_id: str
-    player_name: str
+    #: A Minecraft name is at most 16 characters; the bound is generous rather than exact because the
+    #: field is also what an offline-mode or renamed player ends up as. It exists to stop a caller
+    #: sending an unbounded string that would then become a primary key and a console table cell.
+    sample_id: str = Field(min_length=1, max_length=200)
+    player_name: str = Field(min_length=1, max_length=64)
     features: list[float] = Field(min_length=FEATURE_DIMENSIONS, max_length=FEATURE_DIMENSIONS)
 
 

@@ -121,7 +121,9 @@ def load(path: Path) -> Settings:
 
     database_path = str(database.get("path", Settings.database_path))
     # A relative database path means "next to this config", not "wherever the process happened to start".
-    if not Path(database_path).is_absolute():
+    # SQLite's in-memory name is not a path at all, so it is passed through untouched: joining it onto the
+    # config directory would turn `:memory:` into a file called that.
+    if database_path != ":memory:" and not Path(database_path).is_absolute():
         database_path = str((path.parent / database_path).resolve())
 
     return Settings(

@@ -10,7 +10,7 @@ two places.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from app.admin_auth import COOKIE_NAME, AdminAuth
@@ -75,7 +75,7 @@ def create_admin_router(
     # -- session ---------------------------------------------------------------------------------
 
     @router.post("/login")
-    def login(payload: LoginPayload, response: Response) -> dict:
+    def login(payload: LoginPayload, response: Response, request: Request) -> dict:
         token = auth.login(payload.username, payload.password)
         if token is None:
             raise HTTPException(status_code=401, detail="invalid credentials")
@@ -84,8 +84,12 @@ def create_admin_router(
             token,
             httponly=True,
             samesite="strict",
+            # Marked Secure when the request itself arrived over TLS, so the cookie is not sent back in
+            # the clear. Not unconditional: a service behind a plain-HTTP reverse proxy would then never
+            # receive the cookie at all and the console would be unusable.
+            secure=request.url.scheme == "https",
             path="/",
-            max_age=8 * 3600,
+            max_age=auth.session_ttl_seconds,
         )
         return {"username": payload.username}
 
@@ -232,11 +236,12 @@ def create_admin_router(
 
     @router.get("/uploads")
     def list_uploads(username: str = Depends(require_admin)) -> dict:
-        """Every upload across every tenant, newest first, with the player names inside it."""
-        rows = store.uploads()
-        for row in rows:
-            row["players"] = store.players_of_session(row["tenant_id"], row["session_id"])
-        return {"uploads": rows}
+        """Every upload across every tenant, newest first, with the player names inside it.
+
+        The names come back on the session row rather than from a per-row query over the samples: a batch
+        that has been undone has no samples left, and the history still has to say who was in it.
+        """
+        return {"uploads": store.uploads()}
 
     @router.post("/uploads/{tenant_id}/{session_id}/undo")
     def undo_upload(
