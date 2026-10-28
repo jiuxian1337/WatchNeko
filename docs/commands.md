@@ -279,6 +279,8 @@ Milliseconds per prediction (avg. 20k): 0.019
 /watchneko record start Steve cheat
 ```
 
+参数支持 **Tab 补全**：`<玩家>` 补全在线玩家，`<cheat|legit>` 补全这两个词。
+
 ### `/watchneko record stop`
 
 结束录制，并决定这份数据要不要。
@@ -296,6 +298,8 @@ Milliseconds per prediction (avg. 20k): 0.019
 ```
 
 **玩家不在线也能 stop。** 参数是**名字**而不是玩家选择器，所以录到一半人走了、再也不回来，你照样能结束这次录制并选择上传或丢弃。
+
+**参数支持 Tab 补全**：`<玩家名>` 只补全**当前正在录制**的玩家（含已断线暂停的），`<upload|discard>` 补全这两个词。按 Tab 就能看到现在有哪些录制等着处理。
 
 **动作写错不会丢数据。** `upload` / `discard` 拼错时命令会直接拒绝，录制原样保留，重打一次即可。
 

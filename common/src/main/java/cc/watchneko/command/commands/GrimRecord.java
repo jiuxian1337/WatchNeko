@@ -7,6 +7,7 @@ import cc.watchneko.cloud.RecordingSession;
 import cc.watchneko.cloud.RecordingSessions;
 import cc.watchneko.cloud.SampleUploadResult;
 import cc.watchneko.command.BuildableCommand;
+import cc.watchneko.command.CommandUtils;
 import cc.watchneko.platform.api.command.PlayerSelector;
 import cc.watchneko.platform.api.player.PlatformPlayer;
 import cc.watchneko.platform.api.sender.Sender;
@@ -16,6 +17,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.incendo.cloud.CommandManager;
 import org.incendo.cloud.context.CommandContext;
 import org.incendo.cloud.parser.standard.StringParser;
+import org.incendo.cloud.suggestion.Suggestion;
+import org.incendo.cloud.suggestion.SuggestionProvider;
 
 import java.util.Locale;
 import java.util.Optional;
@@ -42,6 +45,28 @@ public class GrimRecord implements BuildableCommand {
 
     private static final String PERMISSION = "watchneko.record";
 
+    /** The only two labels a session can carry. */
+    private static final SuggestionProvider<Sender> LABEL_SUGGESTIONS =
+            CommandUtils.fromStrings("cheat", "legit");
+
+    /** The only two ways to resolve a stopped session. */
+    private static final SuggestionProvider<Sender> ACTION_SUGGESTIONS =
+            CommandUtils.fromStrings("upload", "discard");
+
+    /**
+     * The names of players who are currently being recorded.
+     *
+     * <p>Read at completion time rather than captured once: sessions start and stop while the server runs,
+     * and a fixed list would offer names that are no longer recorded.
+     */
+    private static final SuggestionProvider<Sender> RECORDED_PLAYER_SUGGESTIONS =
+            SuggestionProvider.blocking((context, input) -> RecordingSessions.all().stream()
+                    .map(RecordingSession::playerName)
+                    .distinct()
+                    .sorted(String.CASE_INSENSITIVE_ORDER)
+                    .map(Suggestion::suggestion)
+                    .toList());
+
     @Override
     public void register(final CommandManager<Sender> commandManager) {
         commandManager.command(
@@ -49,8 +74,9 @@ public class GrimRecord implements BuildableCommand {
                         .literal("record")
                         .literal("start")
                         .permission(PERMISSION)
-                        .required("target", WatchNekoAPI.INSTANCE.getCommandAdapter().singlePlayerSelectorParser())
-                        .required("label", StringParser.stringParser())
+                        .required("target", WatchNekoAPI.INSTANCE.getCommandAdapter().singlePlayerSelectorParser(),
+                                WatchNekoAPI.INSTANCE.getCommandAdapter().onlinePlayerSuggestions())
+                        .required("label", StringParser.stringParser(), LABEL_SUGGESTIONS)
                         .handler(this::handleStart));
 
         commandManager.command(
@@ -60,8 +86,8 @@ public class GrimRecord implements BuildableCommand {
                         .permission(PERMISSION)
                         // A name, not a player selector: the player may well have disconnected, and the
                         // whole point of stop is that an interrupted recording can still be resolved.
-                        .required("target", StringParser.stringParser())
-                        .required("action", StringParser.stringParser())
+                        .required("target", StringParser.stringParser(), RECORDED_PLAYER_SUGGESTIONS)
+                        .required("action", StringParser.stringParser(), ACTION_SUGGESTIONS)
                         .handler(this::handleStop));
     }
 
