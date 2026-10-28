@@ -30,6 +30,15 @@ public class FastBreak extends Check implements BlockBreakCheck {
     // For some reason these states flag and I don't know why.
     // Better to just exempt to not annoy legit players.
     private static final Set<StateType> EXEMPT_STATES = Set.of();
+
+    /**
+     * The most latency is allowed to widen the per-block tolerance.
+     *
+     * <p>Capped because a player cannot be given unlimited slack for claiming a bad connection — the
+     * tolerance is subtracted from every short measurement, so an unbounded value would let a spoofed
+     * 5-second ping mask a 5-second-per-block advantage.
+     */
+    private static final int MAX_PING_TOLERANCE = 400;
     private final boolean clientOlderThanServer = PacketEvents.getAPI().getServerManager().getVersion().getProtocolVersion() > player.getClientVersion().getProtocolVersion();
     // The block the player is currently breaking
     Vector3i targetBlockPosition = null;
@@ -94,10 +103,25 @@ public class FastBreak extends Check implements BlockBreakCheck {
 
             clampBalance();
 
-            if (diff < 25) {  // Reduce buffer if "close enough"
+            // A whole tick of slack, on top of the measured ping.
+            //
+            // Breaking time is counted from when the server *received* the start packet to when it
+            // received the finish packet. Both timestamps are server-side, but the client's own tick
+            // only emits the animation that keeps `maximumBlockDamage` current once per tick, and a
+            // jittery connection reorders and delays those relative to the two digging packets. Under
+            // about a tick of latency variance the measured time can therefore come up short through
+            // no fault of the player, and `diff` feeds straight into a buffer that only decays by 10%
+            // per near-miss — so a few unlucky blocks in a row add up to a flag.
+            //
+            // This is what the old balance clamp was trying to do, and could not: it clamped the
+            // *accumulated* balance to the ping, which does nothing to stop the first short block from
+            // being counted at full weight.
+            final double tolerance = tolerance(player.getTransactionPing());
+
+            if (diff < tolerance) {  // Reduce buffer if "close enough"
                 blockBreakBalance *= 0.9;
             } else { // Otherwise, increase buffer
-                blockBreakBalance += diff;
+                blockBreakBalance += diff - tolerance;
             }
 
             if (blockBreakBalance > 1000) { // If more than a second of advantage
@@ -124,5 +148,20 @@ public class FastBreak extends Check implements BlockBreakCheck {
         double balance = Math.max(1000, (player.getTransactionPing()));
         blockBreakBalance = GrimMath.clamp(blockBreakBalance, -balance, balance); // Clamp not Math.max in case other logic changes
         blockDelayBalance = GrimMath.clamp(blockDelayBalance, -balance, balance);
+    }
+
+    /**
+     * How far a block may finish early before any of it counts as an advantage.
+     *
+     * <p>One tick covers the granularity of the client's own tick — the animation packet that refreshes
+     * the predicted damage is only sent once per tick, so a break that spans one tick boundary can be
+     * measured up to a tick short even on a perfect connection. Above that, latency widens the window
+     * because jitter shifts the digging packets relative to those animation packets.
+     *
+     * <p>Exposed for the test: the arithmetic is the whole of the fix, and it should be pinned somewhere
+     * that does not need a live {@code PlayerData} to run.
+     */
+    static double tolerance(final int transactionPingMs) {
+        return 50 + Math.max(0, Math.min(transactionPingMs, MAX_PING_TOLERANCE));
     }
 }
