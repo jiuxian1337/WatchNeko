@@ -58,6 +58,18 @@ public class ConfigManagerFileImpl implements ConfigManager, BasicReloadable {
             throw new RuntimeException("Failed to save default config files", e);
         }
 
+        // saveAllDefaults only writes a file that does not exist yet, so keys added in a later release
+        // never reach a server that already has a config.yml. Insert them before loading.
+        for (final ConfigCompleter.Result result : ConfigCompleter.completeAll(
+                WatchNekoAPI.class, config.getLanguage(), WatchNekoAPI.INSTANCE.getGrimPlugin().getDataFolder())) {
+            if (result.failed()) {
+                LogUtil.error("Failed to add missing keys to " + result.file().getName(), result.failure());
+            } else {
+                LogUtil.info("Added " + result.added().size() + " missing key(s) to " + result.file().getName()
+                        + " (backup: " + result.file().getName() + ".bak): " + String.join(", ", result.added()));
+            }
+        }
+
         try {
             config.loadAll();
         } catch (Exception e) {
