@@ -337,7 +337,12 @@ public class MovementCheckRunner extends Check implements PositionCheck {
         // Sprinting status itself does not desync, only the attribute as mojang forgot that the server
         // can change the attribute
         if (!player.inVehicle()) {
-            player.speed += player.compensatedEntities.hasSprintingAttributeEnabled ? player.speed * 0.3f : 0;
+            // 这个方法有点太简单粗暴了 但是确实解决很多速度变动导致的疾跑速度增量问题
+            // 希望不会导致其他问题
+            // 目前只支持1.8的修复，鉴于WatchNeko暂不支持1.9+所以这里暂时不做高版本的修复
+            // 高版本的不同步少了点 但是更抽象 主要参考 https://github.com/GrimAnticheat/Grim/issues/2946
+            boolean fixedSprint = player.getClientVersion().isOlderThan(ClientVersion.V_1_9) ? player.isSprinting : player.compensatedEntities.hasSprintingAttributeEnabled;
+            player.speed += fixedSprint ? player.speed * 0.3f : 0;
         }
 
         boolean clientClaimsRiptide = player.packetStateData.tryingToRiptide;
