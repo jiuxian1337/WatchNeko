@@ -219,21 +219,20 @@ def create_app(
             rejected=rejected,
         )
 
-    @app.delete("/v1/samples/{player_hash}")
+    @app.delete("/v1/samples/{player_name}")
     def delete_player_samples(
-        player_hash: str,
+        player_name: str,
         tenant_id: str = Depends(authenticate),
     ) -> dict:
         """Delete every sample belonging to one player, within the caller's own tenant.
 
         Scoped to the authenticated tenant on purpose: a server owner fulfilling a player's deletion
-        request should not be able to reach into anyone else's data, and the hash is already tenant-salted
-        so it cannot address another tenant's player anyway.
+        request should not be able to reach into anyone else's data.
         """
-        removed = sample_store.delete_player(tenant_id=tenant_id, player_hash=player_hash)
+        removed = sample_store.delete_player(tenant_id=tenant_id, player_name=player_name)
         return {
             "contract_version": CONTRACT_VERSION,
-            "player_hash": player_hash,
+            "player_name": player_name,
             "deleted": removed,
         }
 

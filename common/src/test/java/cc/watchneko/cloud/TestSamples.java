@@ -9,8 +9,8 @@ package cc.watchneko.cloud;
  */
 final class TestSamples {
 
-    static final String HASH_A = "9f2c0d4a5b6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708";
-    static final String HASH_B = "1a2b3c4d5e6f70819f2c0d4a5b6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f80";
+    static final String NAME_A = "Steve";
+    static final String NAME_B = "Alex";
 
     /** A window that moved: non-zero on every derived quantity. */
     static final double[] FEATURES_MOVED = {
@@ -28,15 +28,15 @@ final class TestSamples {
         return new CloudSettings("test-tenant-key", "survival-1");
     }
 
-    static FeatureSample sample(String sampleId, String playerHash, double[] features) {
-        return new FeatureSample(sampleId, playerHash, features.clone());
+    static FeatureSample sample(String sampleId, String playerName, double[] features) {
+        return new FeatureSample(sampleId, playerName, features.clone());
     }
 
     static FeatureSample movedSample(String sampleId) {
-        return new FeatureSample(sampleId, HASH_A, FEATURES_MOVED.clone());
+        return new FeatureSample(sampleId, NAME_A, FEATURES_MOVED.clone());
     }
 
     static FeatureSample stillSample(String sampleId) {
-        return new FeatureSample(sampleId, HASH_B, FEATURES_STILL.clone());
+        return new FeatureSample(sampleId, NAME_B, FEATURES_STILL.clone());
     }
 }

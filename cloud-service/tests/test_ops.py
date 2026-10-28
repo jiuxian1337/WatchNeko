@@ -20,12 +20,12 @@ def features(seed: float) -> list[float]:
 def seed(store: SampleStore, cheat: int = 5, legit: int = 5, when: datetime | None = None) -> None:
     store.record(
         TENANT, "s1", "rs-cheat", "cheat",
-        [{"sample_id": f"c{i}", "player_hash": "h", "features": features(0.8)} for i in range(cheat)],
+        [{"sample_id": f"c{i}", "player_name": "h", "features": features(0.8)} for i in range(cheat)],
         now=when,
     )
     store.record(
         TENANT, "s1", "rs-legit", "legit",
-        [{"sample_id": f"l{i}", "player_hash": "h", "features": features(0.2)} for i in range(legit)],
+        [{"sample_id": f"l{i}", "player_name": "h", "features": features(0.2)} for i in range(legit)],
         now=when,
     )
 
@@ -85,7 +85,7 @@ def test_new_samples_cause_a_republish() -> None:
 
     store.record(
         TENANT, "s1", "rs-cheat", "cheat",
-        [{"sample_id": "c-extra", "player_hash": "h", "features": features(0.9)}],
+        [{"sample_id": "c-extra", "player_name": "h", "features": features(0.9)}],
     )
     outcome = ops.run_once([TENANT])
 
@@ -108,7 +108,7 @@ def test_a_cycle_purges_expired_samples_before_training() -> None:
     old = datetime.now(timezone.utc) - timedelta(days=store.retention_days + 1)
     store.record(
         TENANT, "s1", "rs-old", "cheat",
-        [{"sample_id": "old", "player_hash": "h", "features": features(0.8)}],
+        [{"sample_id": "old", "player_name": "h", "features": features(0.8)}],
         now=old,
     )
     seed(store)
@@ -130,7 +130,7 @@ def test_a_misbehaving_model_is_rolled_back_and_nothing_new_is_published() -> No
 
     store.record(
         TENANT, "s1", "rs-cheat", "cheat",
-        [{"sample_id": "c-extra", "player_hash": "h", "features": features(0.9)}],
+        [{"sample_id": "c-extra", "player_name": "h", "features": features(0.9)}],
     )
     ops.run_once([TENANT])
     second = publisher.current().model_id
@@ -154,7 +154,7 @@ def test_a_rollback_is_recorded_in_the_metrics() -> None:
     ops.run_once([TENANT])
     store.record(
         TENANT, "s1", "rs-cheat", "cheat",
-        [{"sample_id": "c-extra", "player_hash": "h", "features": features(0.9)}],
+        [{"sample_id": "c-extra", "player_name": "h", "features": features(0.9)}],
     )
     ops.run_once([TENANT])
 

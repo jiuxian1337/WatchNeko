@@ -289,8 +289,6 @@ AnalysisA:
         api-key: ""
         # This server's identity, used for per-server quotas and sample attribution.
         server-id: ""
-        # Tenant salt used to hash player ids. Raw UUIDs never leave the server.
-        salt: ""
         # Per-request timeout in milliseconds.
         timeout-ms: 2000
     # How many samples to accumulate before sending. At most one request per player is ever in flight.

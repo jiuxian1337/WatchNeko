@@ -16,7 +16,7 @@ def inference_body(count: int) -> dict:
     return {
         "contract_version": 1,
         "samples": [
-            {"sample_id": f"s{i}", "player_hash": "hash-a", "features": [0.0] * 22}
+            {"sample_id": f"s{i}", "player_name": "Steve", "features": [0.0] * 22}
             for i in range(count)
         ],
     }

@@ -26,10 +26,10 @@ def synthetic_dataset() -> Dataset:
     samples = []
     for index in range(10):
         samples.append(
-            LabelledSample(f"c{index}", "hash-a", features(0.8), CHEAT)
+            LabelledSample(f"c{index}", "Steve", features(0.8), CHEAT)
         )
         samples.append(
-            LabelledSample(f"l{index}", "hash-b", features(0.2), "legit")
+            LabelledSample(f"l{index}", "Alex", features(0.2), "legit")
         )
     return make_dataset(samples)
 
@@ -68,7 +68,7 @@ def test_a_model_remembers_the_dataset_that_trained_it() -> None:
 
 
 def test_a_single_class_dataset_is_refused() -> None:
-    samples = [LabelledSample(f"c{i}", "hash-a", features(0.8), CHEAT) for i in range(5)]
+    samples = [LabelledSample(f"c{i}", "Steve", features(0.8), CHEAT) for i in range(5)]
 
     with pytest.raises(ValueError, match="both cheat and legit"):
         train_model(make_dataset(samples), LogisticTrainer())
@@ -116,11 +116,11 @@ def test_a_dataset_built_from_the_store_trains() -> None:
     store = SampleStore()
     store.record(
         "t1", "s1", "rs-cheat", "cheat",
-        [{"sample_id": f"c{i}", "player_hash": "h", "features": list(features(0.8))} for i in range(5)],
+        [{"sample_id": f"c{i}", "player_name": "h", "features": list(features(0.8))} for i in range(5)],
     )
     store.record(
         "t1", "s1", "rs-legit", "legit",
-        [{"sample_id": f"l{i}", "player_hash": "h", "features": list(features(0.2))} for i in range(5)],
+        [{"sample_id": f"l{i}", "player_name": "h", "features": list(features(0.2))} for i in range(5)],
     )
 
     model = train_model(build_dataset(store, "t1"), LogisticTrainer())

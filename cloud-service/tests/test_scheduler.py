@@ -25,11 +25,11 @@ def features(seed: float) -> list[float]:
 def seed(store: SampleStore) -> None:
     store.record(
         TENANT, "s1", "rs-cheat", "cheat",
-        [{"sample_id": f"c{i}", "player_hash": "h", "features": features(0.8)} for i in range(5)],
+        [{"sample_id": f"c{i}", "player_name": "h", "features": features(0.8)} for i in range(5)],
     )
     store.record(
         TENANT, "s1", "rs-legit", "legit",
-        [{"sample_id": f"l{i}", "player_hash": "h", "features": features(0.2)} for i in range(5)],
+        [{"sample_id": f"l{i}", "player_name": "h", "features": features(0.2)} for i in range(5)],
     )
 
 
@@ -152,8 +152,8 @@ def test_inference_actually_serves_the_published_model() -> None:
         json={
             "contract_version": 1,
             "samples": [
-                {"sample_id": "cheaty", "player_hash": "h", "features": features(0.8)},
-                {"sample_id": "clean", "player_hash": "h", "features": features(0.2)},
+                {"sample_id": "cheaty", "player_name": "h", "features": features(0.8)},
+                {"sample_id": "clean", "player_name": "h", "features": features(0.2)},
             ],
         },
         headers={"authorization": "Bearer k", "x-server-id": "s"},
@@ -195,7 +195,7 @@ def test_the_queue_backlog_reports_samples_not_yet_trained_on() -> None:
 
     store.record(
         TENANT, "s1", "rs-cheat", "cheat",
-        [{"sample_id": "c-new", "player_hash": "h", "features": features(0.9)}],
+        [{"sample_id": "c-new", "player_name": "h", "features": features(0.9)}],
     )
     cycle.run_once([TENANT])
 

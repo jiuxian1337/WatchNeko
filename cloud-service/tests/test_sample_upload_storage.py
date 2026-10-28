@@ -18,7 +18,7 @@ def upload_body(session_id: str = "rs-0001", label: str = "cheat", sample_ids=("
         "recording_session_id": session_id,
         "label": label,
         "samples": [
-            {"sample_id": sample_id, "player_hash": "hash-a", "features": [0.0] * 22}
+            {"sample_id": sample_id, "player_name": "Steve", "features": [0.0] * 22}
             for sample_id in sample_ids
         ],
     }
@@ -93,7 +93,7 @@ def test_inference_is_authenticated_too() -> None:
         "/v1/inference",
         json={
             "contract_version": 1,
-            "samples": [{"sample_id": "a", "player_hash": "h", "features": [0.0] * 22}],
+            "samples": [{"sample_id": "a", "player_name": "h", "features": [0.0] * 22}],
         },
         headers={"authorization": "Bearer wrong", "x-server-id": "survival-1"},
     )
@@ -106,7 +106,7 @@ def test_a_tenant_can_delete_one_players_samples() -> None:
     client = client_with(store, [SURVIVAL])
     client.post("/v1/samples", json=upload_body(), headers=HEADERS)
 
-    response = client.delete("/v1/samples/hash-a", headers=HEADERS)
+    response = client.delete("/v1/samples/Steve", headers=HEADERS)
 
     assert response.status_code == 200
     assert response.json()["deleted"] == 2
@@ -118,7 +118,7 @@ def test_deleting_requires_authentication() -> None:
     client = client_with(store, [SURVIVAL])
     client.post("/v1/samples", json=upload_body(), headers=HEADERS)
 
-    response = client.delete("/v1/samples/hash-a", headers={"authorization": "Bearer wrong"})
+    response = client.delete("/v1/samples/Steve", headers={"authorization": "Bearer wrong"})
 
     assert response.status_code == 401
     assert store.sample_count("t-survival") == 2, "an unauthenticated delete must not remove anything"

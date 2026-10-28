@@ -649,6 +649,8 @@ exploit:
 
 **默认关闭**。在你启用并配置好之前，不会向任何地方发送数据。
 
+> ⚠️ 启用后**玩家名会以明文上传到云端**，没有哈希。云端地址填 `http://` 就是明文过网，公网部署请用 `https://`。详见[云端检测接入指南](cloud-detection.md#隐私说明)。
+
 ```yaml
 AnalysisA:
     cloud:
@@ -656,7 +658,6 @@ AnalysisA:
         endpoint: "https://cloud.example.com"
         api-key: "你的租户密钥"
         server-id: "survival-1"
-        salt: "一段随机字符串"
         timeout-ms: 2000
     batch-size: 8
     analysis-window-size: 10
@@ -672,7 +673,6 @@ AnalysisA:
 | `cloud.endpoint` | `""` | 云端服务地址 |
 | `cloud.api-key` | `""` | 租户 API key，与 `server-id` 一起认证 |
 | `cloud.server-id` | `""` | 本服标识，用于按服统计与样本归属 |
-| `cloud.salt` | `""` | 玩家 ID 哈希用的租户 salt；原始 UUID 不会离开服务器 |
 | `cloud.timeout-ms` | `2000` | 单次请求超时（毫秒） |
 | `batch-size` | `8` | 攒够多少样本发一次；同一玩家同时最多一个请求在途 |
 | `analysis-window-size` | `10` | 投票窗口大小 |

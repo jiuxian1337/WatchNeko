@@ -54,7 +54,7 @@ def test_a_page_is_never_sent_to_someone_signed_out() -> None:
     """Not a client-side guard: the markup must not reach the browser at all."""
     http = client()
 
-    for page in ("dashboard", "tenants", "datasets", "models"):
+    for page in ("dashboard", "tenants", "uploads", "datasets", "models"):
         response = http.get(f"/admin/{page}")
         assert response.status_code == 303
         assert response.headers["location"] == "/admin/login"
@@ -87,6 +87,7 @@ def test_an_unknown_page_is_a_404(signed_in: TestClient) -> None:
     [
         ("dashboard", 'id="metric-grid"'),
         ("tenants", 'id="create-tenant-button"'),
+        ("uploads", 'id="upload-table"'),
         ("datasets", 'id="dataset-table"'),
         ("models", 'id="model-table"'),
     ],
@@ -98,7 +99,7 @@ def test_each_view_is_its_own_document(signed_in: TestClient, page: str, marker:
     assert marker in response.text
     # The page loads exactly one page script, not a bundle that renders every view.
     assert f"page-{page}.js" in response.text
-    for other in {"dashboard", "tenants", "datasets", "models"} - {page}:
+    for other in {"dashboard", "tenants", "uploads", "datasets", "models"} - {page}:
         assert f"page-{other}.js" not in response.text
 
 
@@ -111,7 +112,7 @@ def test_each_page_marks_itself_in_the_navigation(signed_in: TestClient) -> None
 
 def test_the_shared_shell_is_not_duplicated_in_the_pages(signed_in: TestClient) -> None:
     """The rail and top bar come from one template, so they read identically everywhere."""
-    pages = [signed_in.get(f"/admin/{page}").text for page in ("dashboard", "tenants", "models")]
+    pages = [signed_in.get(f"/admin/{page}").text for page in ("dashboard", "tenants", "uploads", "models")]
 
     for html in pages:
         assert 'class="rail"' in html
@@ -127,7 +128,7 @@ def test_the_assets_are_served() -> None:
 
     assert http.get("/admin/assets/md3.css").status_code == 200
     assert http.get("/admin/assets/console.js").status_code == 200
-    for page in ("login", "dashboard", "tenants", "datasets", "models"):
+    for page in ("login", "dashboard", "tenants", "uploads", "datasets", "models"):
         assert http.get(f"/admin/assets/page-{page}.js").status_code == 200
 
 

@@ -4,14 +4,9 @@ import ac.grim.grimac.api.config.ConfigManager;
 import cc.watchneko.analysis.RotationWindow;
 import cc.watchneko.utils.anticheat.LogUtil;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -59,12 +54,10 @@ public final class CloudGateway {
 
     private final CloudClient client;
     private final ModelMetadata metadata;
-    private final String salt;
 
-    private CloudGateway(final CloudClient client, final ModelMetadata metadata, final String salt) {
+    private CloudGateway(final CloudClient client, final ModelMetadata metadata) {
         this.client = client;
         this.metadata = metadata;
-        this.salt = salt;
     }
 
     /** The gateway in effect, or {@code null} when cloud detection is not usable right now. */
@@ -110,13 +103,13 @@ public final class CloudGateway {
      * <p>This is the seam the fail-open behaviour is tested through.
      */
     public static Optional<CloudGateway> attempt(
-            final CloudTransport transport, final CloudSettings settings, final String salt) {
+            final CloudTransport transport, final CloudSettings settings) {
         try {
             final CloudClient client = new CloudClient(transport, settings);
 
             final Optional<ModelMetadata> metadata = client.fetchModelMetadata();
             if (metadata.isEmpty()) {
-                return Optional.of(new CloudGateway(client, null, salt));
+                return Optional.of(new CloudGateway(client, null));
             }
 
             final int expected = RotationWindow.FEATURE_DIMENSIONS;
@@ -126,10 +119,10 @@ public final class CloudGateway {
                 log(() -> LogUtil.error("AnalysisA cloud model expects " + metadata.get().featureDimensions()
                         + " feature dimensions but this build sends " + expected
                         + "; detection stays disabled, recording still works"));
-                return Optional.of(new CloudGateway(client, null, salt));
+                return Optional.of(new CloudGateway(client, null));
             }
 
-            return Optional.of(new CloudGateway(client, metadata.get(), salt));
+            return Optional.of(new CloudGateway(client, metadata.get()));
         } catch (Exception exception) {
             log(() -> LogUtil.error("AnalysisA could not reach the cloud; detection stays disabled", exception));
             return Optional.empty();
@@ -176,7 +169,6 @@ public final class CloudGateway {
         final String endpoint = config.getStringElse("AnalysisA.cloud.endpoint", "");
         final String apiKey = config.getStringElse("AnalysisA.cloud.api-key", "");
         final String serverId = config.getStringElse("AnalysisA.cloud.server-id", "");
-        final String salt = config.getStringElse("AnalysisA.cloud.salt", "");
         final int timeoutMs = config.getIntElse("AnalysisA.cloud.timeout-ms", 2000);
 
         if (endpoint.isBlank() || apiKey.isBlank() || serverId.isBlank()) {
@@ -186,7 +178,7 @@ public final class CloudGateway {
 
         final HttpCloudTransport transport =
                 new HttpCloudTransport(endpoint, Duration.ofMillis(Math.max(1, timeoutMs)));
-        return attempt(transport, new CloudSettings(apiKey, serverId), salt).orElse(null);
+        return attempt(transport, new CloudSettings(apiKey, serverId)).orElse(null);
     }
 
     private static synchronized void scheduleRecovery() {
@@ -203,18 +195,6 @@ public final class CloudGateway {
 
     public ModelMetadata metadata() {
         return metadata;
-    }
-
-    /** Hashes a player id under the tenant salt, so no raw identity ever leaves the server. */
-    public String playerHash(final UUID uuid) {
-        try {
-            final MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            digest.update(salt.getBytes(StandardCharsets.UTF_8));
-            digest.update(uuid.toString().getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest.digest());
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is required", exception);
-        }
     }
 
     /** Sends a batch off the packet thread. */

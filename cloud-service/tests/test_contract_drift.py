@@ -54,11 +54,11 @@ def test_a_missing_request_field_is_rejected_rather_than_defaulted() -> None:
     pinned_request = request(case)
 
     drifted = copy.deepcopy(pinned_request["body"])
-    del drifted["samples"][0]["player_hash"]
+    del drifted["samples"][0]["player_name"]
 
     rejected = client.post(pinned_request["path"], json=drifted, headers=pinned_request["headers"])
 
-    assert rejected.status_code == 422, "a sample without a player hash must be rejected"
+    assert rejected.status_code == 422, "a sample without a player name must be rejected"
     assert rejected.json() == {
         "contract_version": 1,
         "error": "invalid_request",

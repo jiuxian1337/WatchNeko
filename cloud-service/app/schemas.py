@@ -35,7 +35,7 @@ class Sample(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     sample_id: str
-    player_hash: str
+    player_name: str
     features: list[float] = Field(min_length=FEATURE_DIMENSIONS, max_length=FEATURE_DIMENSIONS)
 
 

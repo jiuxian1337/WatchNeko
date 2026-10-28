@@ -192,7 +192,7 @@ def test_datasets_and_samples_are_reported_per_tenant(client: TestClient) -> Non
 
 
 def test_a_player_can_be_deleted_through_the_console(client: TestClient) -> None:
-    response = client.delete("/admin/api/samples/t1/hash-a")
+    response = client.delete("/admin/api/samples/t1/Steve")
 
     assert response.status_code == 200
     assert response.json()["deleted"] == 0
@@ -243,3 +243,44 @@ def test_a_negative_quota_is_rejected_by_the_api(client: TestClient) -> None:
     )
 
     assert response.status_code == 422
+
+
+def test_upload_history_shows_plain_text_player_names() -> None:
+    service_instance = service()
+    service_instance.store.record(
+        "t1", "survival-1", "rs-1", "cheat",
+        [{"sample_id": "a", "player_name": "Steve", "features": [0.0] * 22}],
+    )
+    client = signed_in(TestClient(service_instance.app))
+
+    uploads = client.get("/admin/api/uploads").json()["uploads"]
+
+    assert len(uploads) == 1
+    assert uploads[0]["session_id"] == "rs-1"
+    assert uploads[0]["players"] == ["Steve"]
+    assert uploads[0]["remaining"] == 1
+
+
+def test_an_upload_can_be_undone_through_the_console() -> None:
+    service_instance = service()
+    service_instance.store.record(
+        "t1", "survival-1", "rs-1", "cheat",
+        [{"sample_id": "a", "player_name": "Steve", "features": [0.0] * 22}],
+    )
+    client = signed_in(TestClient(service_instance.app))
+
+    response = client.post("/admin/api/uploads/t1/rs-1/undo")
+
+    assert response.status_code == 200
+    assert response.json()["deleted"] == 1
+    assert service_instance.store.sample_count("t1") == 0
+    undone = client.get("/admin/api/uploads").json()["uploads"][0]
+    assert undone["remaining"] == 0
+    assert undone["undone_at"] is not None
+
+
+def test_undoing_an_upload_needs_a_session() -> None:
+    client = TestClient(service().app)
+
+    assert client.post("/admin/api/uploads/t1/rs-1/undo").status_code == 401
+    assert client.get("/admin/api/uploads").status_code == 401

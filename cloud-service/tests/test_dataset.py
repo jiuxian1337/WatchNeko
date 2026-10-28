@@ -10,13 +10,13 @@ from app.store import SampleStore
 FEATURES = [0.1] * 22
 
 
-def seed(store: SampleStore, session_id: str, label: str, ids: list[str], player="hash-a") -> None:
+def seed(store: SampleStore, session_id: str, label: str, ids: list[str], player="Steve") -> None:
     store.record(
         "t1",
         "s1",
         session_id,
         label,
-        [{"sample_id": i, "player_hash": player, "features": FEATURES} for i in ids],
+        [{"sample_id": i, "player_name": player, "features": FEATURES} for i in ids],
     )
 
 
@@ -81,7 +81,7 @@ def test_another_tenants_samples_never_enter_this_dataset(store: SampleStore) ->
         "s2",
         "rs-cheat",
         "cheat",
-        [{"sample_id": "c1", "player_hash": "hash-b", "features": FEATURES}],
+        [{"sample_id": "c1", "player_name": "Alex", "features": FEATURES}],
     )
 
     assert len(build_dataset(store, "t1").samples) == 1

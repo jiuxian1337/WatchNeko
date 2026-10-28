@@ -21,7 +21,7 @@ class SampleUploadContractTest {
                 Label.CHEAT,
                 List.of(
                         TestSamples.movedSample("s-1001"),
-                        TestSamples.sample("s-1002", TestSamples.HASH_A, TestSamples.FEATURES_STILL)));
+                        TestSamples.sample("s-1002", TestSamples.NAME_A, TestSamples.FEATURES_STILL)));
 
         CloudRequest sent = transport.lastRequest();
         assertEquals("POST", sent.method());

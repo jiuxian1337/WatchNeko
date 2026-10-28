@@ -19,7 +19,7 @@ AUTHORIZATION_SCHEME = "Bearer"
 
 @dataclass(frozen=True)
 class Tenant:
-    """One server owner: the unit of quota, sample ownership and salting."""
+    """One server owner: the unit of quota and sample ownership."""
 
     tenant_id: str
     api_key: str

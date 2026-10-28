@@ -78,6 +78,12 @@ export const api = {
     deleteTenant: (id) => request(`/tenants/${encodeURIComponent(id)}`, { method: 'DELETE' }),
     datasets: () => request('/datasets'),
     samples: () => request('/samples'),
+    uploads: () => request('/uploads'),
+    undoUpload: (tenantId, sessionId) =>
+        request(
+            `/uploads/${encodeURIComponent(tenantId)}/${encodeURIComponent(sessionId)}/undo`,
+            { method: 'POST' },
+        ),
     models: () => request('/models'),
     rollback: () => request('/models/rollback', { method: 'POST' }),
     retrain: () => request('/retrain', { method: 'POST' }),

@@ -101,7 +101,7 @@ public final class CloudClient {
     private static JsonObject sampleToJson(FeatureSample sample) {
         JsonObject json = new JsonObject();
         json.addProperty("sample_id", sample.sampleId());
-        json.addProperty("player_hash", sample.playerHash());
+        json.addProperty("player_name", sample.playerName());
 
         JsonArray features = new JsonArray();
         for (double value : sample.features()) {

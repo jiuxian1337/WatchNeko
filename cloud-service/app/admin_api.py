@@ -218,15 +218,42 @@ def create_admin_router(
                     "tenant_id": record.tenant_id,
                     "samples": store.sample_count(record.tenant_id),
                     "sessions": len(store.session_ids(record.tenant_id)),
-                    "players": len(store.player_hashes(record.tenant_id)),
+                    "players": len(store.player_names(record.tenant_id)),
                 }
             )
         return {"samples": rows}
 
-    @router.delete("/samples/{tenant_id}/{player_hash}")
-    def delete_player(tenant_id: str, player_hash: str, username: str = Depends(require_admin)) -> dict:
-        removed = store.delete_player(tenant_id=tenant_id, player_hash=player_hash)
-        return {"tenant_id": tenant_id, "player_hash": player_hash, "deleted": removed}
+    @router.delete("/samples/{tenant_id}/{player_name}")
+    def delete_player(tenant_id: str, player_name: str, username: str = Depends(require_admin)) -> dict:
+        removed = store.delete_player(tenant_id=tenant_id, player_name=player_name)
+        return {"tenant_id": tenant_id, "player_name": player_name, "deleted": removed}
+
+    # -- upload history --------------------------------------------------------------------------
+
+    @router.get("/uploads")
+    def list_uploads(username: str = Depends(require_admin)) -> dict:
+        """Every upload across every tenant, newest first, with the player names inside it."""
+        rows = store.uploads()
+        for row in rows:
+            row["players"] = store.players_of_session(row["tenant_id"], row["session_id"])
+        return {"uploads": rows}
+
+    @router.post("/uploads/{tenant_id}/{session_id}/undo")
+    def undo_upload(
+        tenant_id: str, session_id: str, username: str = Depends(require_admin)
+    ) -> dict:
+        """Delete one upload's samples.
+
+        Only the samples go. The session row stays as a tombstone so the history still records that the
+        upload happened and was undone, and any model already trained on the data is left alone: the
+        next retrain simply will not see it.
+        """
+        removed = store.undo_upload(tenant_id, session_id)
+        return {
+            "tenant_id": tenant_id,
+            "session_id": session_id,
+            "deleted": removed,
+        }
 
     # -- models ----------------------------------------------------------------------------------
 

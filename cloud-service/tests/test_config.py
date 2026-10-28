@@ -227,7 +227,7 @@ def test_a_service_built_for_lightgbm_can_train_and_serve(tmp_path: Path) -> Non
     for label, seed in (("cheat", 0.8), ("legit", 0.2)):
         service.store.record(
             "t1", "s1", f"rs-{label}", label,
-            [{"sample_id": f"{label}{i}", "player_hash": "h", "features": features(seed)} for i in range(6)],
+            [{"sample_id": f"{label}{i}", "player_name": "h", "features": features(seed)} for i in range(6)],
         )
     service.tenants.create("t1")
 

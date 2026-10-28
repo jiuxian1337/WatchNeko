@@ -15,7 +15,7 @@ class RecordingSessionsTest {
     private static final UUID PLAYER = UUID.randomUUID();
 
     private static FeatureSample sample(final String id) {
-        return new FeatureSample(id, "hash-a", new double[RotationWindow.FEATURE_DIMENSIONS]);
+        return new FeatureSample(id, "Steve", new double[RotationWindow.FEATURE_DIMENSIONS]);
     }
 
     @AfterEach

@@ -9,8 +9,8 @@ import pytest
 from app.store import SampleStore
 
 
-def sample(sample_id: str, player_hash: str = "hash-a") -> dict:
-    return {"sample_id": sample_id, "player_hash": player_hash, "features": [0.0] * 22}
+def sample(sample_id: str, player_name: str = "Steve") -> dict:
+    return {"sample_id": sample_id, "player_name": player_name, "features": [0.0] * 22}
 
 
 @pytest.fixture
@@ -51,24 +51,24 @@ def test_samples_are_isolated_per_tenant(store: SampleStore) -> None:
     assert store.sample_count() == 2
 
 
-def test_a_players_samples_can_be_deleted_by_hash(store: SampleStore) -> None:
-    store.record("t1", "s1", "rs-1", "cheat", [sample("a", "hash-a"), sample("b", "hash-a")])
-    store.record("t1", "s1", "rs-1", "cheat", [sample("c", "hash-b")])
+def test_a_players_samples_can_be_deleted_by_name(store: SampleStore) -> None:
+    store.record("t1", "s1", "rs-1", "cheat", [sample("a", "Steve"), sample("b", "Steve")])
+    store.record("t1", "s1", "rs-1", "cheat", [sample("c", "Alex")])
 
-    removed = store.delete_player("t1", "hash-a")
+    removed = store.delete_player("t1", "Steve")
 
     assert removed == 2
     assert store.sample_count("t1") == 1
-    assert store.player_hashes("t1") == ["hash-b"]
+    assert store.player_names("t1") == ["Alex"]
 
 
 def test_deleting_one_tenants_player_leaves_another_tenants_data_alone(
     store: SampleStore,
 ) -> None:
-    store.record("t1", "s1", "rs-1", "cheat", [sample("a", "hash-a")])
-    store.record("t2", "s2", "rs-1", "cheat", [sample("a", "hash-a")])
+    store.record("t1", "s1", "rs-1", "cheat", [sample("a", "Steve")])
+    store.record("t2", "s2", "rs-1", "cheat", [sample("a", "Steve")])
 
-    store.delete_player("t1", "hash-a")
+    store.delete_player("t1", "Steve")
 
     assert store.sample_count("t1") == 0
     assert store.sample_count("t2") == 1

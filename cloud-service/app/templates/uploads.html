@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="stack">
+    <div class="section-head">
+        <span class="section-head__title">上传记录</span>
+    </div>
+
+    <div class="table-wrap" id="upload-table">
+        <p class="empty">加载中…</p>
+    </div>
+
+    <p class="card__hint">
+        撤销一次上传只删除该批样本，不会动已经训练好的模型——下一次训练就不会再看到这些样本了。
+        已撤销的记录仍会留在这里，样本数显示为 0。
+    </p>
+</div>
+{% endblock %}
+{% block script %}
+<script type="module" src="/admin/assets/page-uploads.js"></script>
+{% endblock %}

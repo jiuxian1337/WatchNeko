@@ -23,6 +23,7 @@ from app.admin_auth import COOKIE_NAME, AdminAuth
 NAV = (
     {"id": "dashboard", "label": "仪表盘", "icon": "dashboard"},
     {"id": "tenants", "label": "租户", "icon": "key"},
+    {"id": "uploads", "label": "上传记录", "icon": "upload"},
     {"id": "datasets", "label": "数据集", "icon": "database"},
     {"id": "models", "label": "模型", "icon": "model_training"},
 )
@@ -31,6 +32,7 @@ NAV = (
 PAGES = {
     "dashboard": "仪表盘",
     "tenants": "租户",
+    "uploads": "上传记录",
     "datasets": "数据集",
     "models": "模型",
 }

@@ -33,8 +33,8 @@ import java.util.UUID;
  * record. The session is then either uploaded as one labelled batch or thrown away, so a bad recording
  * costs nothing and never reaches the dataset.
  *
- * <p>Recording needs an authenticated, reachable cloud — for the tenant salt that hashes the player id and
- * for somewhere to upload to. It does <em>not</em> need a published model: the first model is trained from
+ * <p>Recording needs an authenticated, reachable cloud — somewhere to upload the samples to. It does
+ * <em>not</em> need a published model: the first model is trained from
  * exactly the samples a model-less server records. Requiring one here would make the first model
  * impossible to produce.
  */

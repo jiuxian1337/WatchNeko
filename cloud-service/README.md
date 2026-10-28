@@ -303,7 +303,7 @@ app/
   admin_auth.py 管理员会话（HMAC 签名，无状态）
   admin_api.py  控制台调用的管理 API
   quota.py      按样本数计的滑动窗口，全有或全无；0 表示不限
-  store.py      SQLite 双表（录制会话 + 样本），按租户隔离，保留期与按哈希删除
+  store.py      SQLite 双表（录制会话 + 样本），按租户隔离，保留期、上传记录与撤销、按玩家名删除
   dataset.py    按内容寻址的数据集快照
   train.py      可插拔训练后端；阈值随模型推导
   publish.py    发布历史与回滚；健康判据

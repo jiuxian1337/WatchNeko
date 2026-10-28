@@ -24,7 +24,7 @@ LEGIT = "legit"
 @dataclass(frozen=True)
 class LabelledSample:
     sample_id: str
-    player_hash: str
+    player_name: str
     features: tuple[float, ...]
     label: str
 
@@ -81,11 +81,11 @@ def build_dataset(store: SampleStore, tenant_id: str) -> Dataset:
         if label not in (CHEAT, LEGIT):
             continue
 
-        for sample_id, player_hash, features in store.samples_of_session(tenant_id, session_id):
+        for sample_id, player_name, features in store.samples_of_session(tenant_id, session_id):
             samples.append(
                 LabelledSample(
                     sample_id=sample_id,
-                    player_hash=player_hash,
+                    player_name=player_name,
                     features=tuple(features),
                     label=label,
                 )

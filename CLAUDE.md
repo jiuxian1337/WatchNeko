@@ -113,7 +113,7 @@ flag 链路：`Check.flag()` → `FlagEvent`（可取消）→ `PunishmentManage
 - `canInfer() == false` 不等于 `current() == null`：冷启动（云端可达、已认证、但还没有已发布模型）和特征维度不符都产生一个 **非 null 但不可推理**的 gateway。这个区别是刻意的——录制样本只需要可达的云端，把「无模型」当成不可用会让第一个模型永远训练不出来。这两种状态下 `/watchneko record` 仍然可用。
 - `AnalysisA`（RotationCheck）在攻击锚点处取 `RotationWindow`（22 维 = 11 次旋转更新 × yaw/pitch），攒批异步推理。云端裁决只变成**票**，是否告警由本地 `VerdictVotes` 按 `analysis-window-size` / `min-cheat-votes`（默认 10 / 8）决定——云端从不惩罚。429 不关检测，而是进入配额门控，只发有运动能量的窗口。
 - 录制会话（`/watchneko record start`）期间样本只进 `RecordingSession`，**不送推理**：训练数据不能影响它要训练的检测。玩家断线自动 pause，回来 resume。样本 id 以会话 id 为作用域，否则重连会撞上云端已有的 id。
-- 玩家 ID 用租户 salt 哈希后才离开服务器；原始角度不出服务器，只有归一化后的 `features` 上线。
+- 玩家名以**明文**随样本上行（无哈希、无 salt），用于归属与按名撤销；原始角度不出服务器，只有归一化后的 `features` 上线。
 
 ### 契约纪律
 

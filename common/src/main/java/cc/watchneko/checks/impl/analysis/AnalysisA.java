@@ -137,9 +137,9 @@ public final class AnalysisA extends Check implements RotationCheck, AttackSigna
                 continue;
             }
 
-            // The sample id is derived from the tenant-salted hash, never from the raw UUID: the id travels
-            // on the wire, and the whole point of hashing is that nothing identifying leaves the server.
-            final String playerHash = gateway.playerHash(player.uuid);
+            // The player name travels in plain text: it is what lets an operator find this sample later
+            // and undo the upload it came from. It is also what the sample id is built from.
+            final String playerName = player.getName();
             final double[] features = extracted.get().features();
 
             // A player being recorded is producing training data, not evidence. The sample goes to the
@@ -157,8 +157,8 @@ public final class AnalysisA extends Check implements RotationCheck, AttackSigna
                 // to the session is what makes a reconnect, which resets the per-player counter, stop
                 // producing ids the cloud already has.
                 recording.get().add(new FeatureSample(
-                        SampleIdentity.forRecording(playerHash, recording.get().sessionId(), ++sampleCounter),
-                        playerHash,
+                        SampleIdentity.forRecording(playerName, recording.get().sessionId(), ++sampleCounter),
+                        playerName,
                         features));
                 continue;
             }
@@ -171,7 +171,7 @@ public final class AnalysisA extends Check implements RotationCheck, AttackSigna
             }
 
             batch.add(new FeatureSample(
-                    SampleIdentity.of(playerHash, ++sampleCounter), playerHash, features));
+                    SampleIdentity.of(playerName, ++sampleCounter), playerName, features));
         }
     }
 
