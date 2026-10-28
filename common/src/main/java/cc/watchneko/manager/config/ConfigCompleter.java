@@ -1,6 +1,9 @@
 package cc.watchneko.manager.config;
 
 import github.scarsz.configuralize.Language;
+import org.yaml.snakeyaml.LoaderOptions;
+import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.SafeConstructor;
 
 import java.io.File;
 import java.io.IOException;
@@ -48,8 +51,15 @@ final class ConfigCompleter {
     /** A mapping key: leading spaces, the key, then anything (an inline value and/or a trailing comment). */
     private static final Pattern KEY = Pattern.compile("^( *)([A-Za-z0-9_.\\-]+):(.*)$");
 
-    /** A top-level version marker, matched anywhere so a stale one can be rewritten in place. */
-    private static final Pattern VERSION_LINE = Pattern.compile("^" + VERSION_KEY + ":\\s*(\\d*)\\s*$");
+    /**
+     * A top-level version marker, matched anywhere so a stale one can be rewritten in place.
+     *
+     * <p>A trailing comment is tolerated: an operator who annotates the line has not changed what the
+     * marker means, and failing to match would append a second {@code config-version} rather than
+     * rewriting the first.
+     */
+    private static final Pattern VERSION_LINE =
+            Pattern.compile("^" + VERSION_KEY + ":\\s*(\\d*)\\s*(?:#.*)?$");
 
     private ConfigCompleter() {
     }
@@ -82,6 +92,37 @@ final class ConfigCompleter {
         }
     }
 
+    /**
+     * Checks that a completed file still parses, before it replaces the operator's own.
+     *
+     * <p>An interface so the merge logic stays testable without a YAML implementation, and so the real
+     * check can be swapped for one that always passes if a future platform cannot carry SnakeYAML.
+     */
+    interface Validation {
+        /** @return a description of the problem, or {@code null} when the text parses */
+        String check(String yaml);
+    }
+
+    /** The production check: the same SnakeYAML the loader uses, with the same options. */
+    static final Validation SNAKEYAML_VALIDATION = new Validation() {
+        @Override
+        public String check(final String yaml) {
+            final LoaderOptions options = new LoaderOptions();
+            // A duplicate key is what an interrupted earlier run could leave behind, and it is not what
+            // this check is for: it would reject files the loader itself accepts.
+            options.setAllowDuplicateKeys(true);
+            try {
+                new Yaml(new SafeConstructor(options)).load(yaml);
+                return null;
+            } catch (final RuntimeException exception) {
+                return exception.getMessage();
+            }
+        }
+    };
+
+    /** Swappable so a test can drive the failure path without writing invalid YAML by hand. */
+    static Validation validation = SNAKEYAML_VALIDATION;
+
     private static java.util.Optional<Result> completeFile(
             final File file, final String source, final List<String> defaults) throws IOException {
         final String text = Files.readString(file.toPath(), StandardCharsets.UTF_8);
@@ -93,22 +134,51 @@ final class ConfigCompleter {
 
         // The marker is forced to the current version every run, whether or not anything else changed.
         // It is a record of which release last touched this file, not an input to the completion: an
-        // operator whose file claims a newer version still gets their missing keys.
-        final List<String> completed = source.equals(VERSIONED_SOURCE)
-                ? stampVersion(merge.lines(), currentVersion(defaults), added)
-                : merge.lines();
+        // operator whose file claims a newer version still gets their missing keys. A bundled file with
+        // no marker has no version to force, so the line is left exactly as the operator wrote it.
+        final int version = source.equals(VERSIONED_SOURCE) ? currentVersion(defaults) : -1;
+        final List<String> completed = version < 0 ? merge.lines() : stampVersion(merge.lines(), version, added);
 
         if (completed.equals(userLines)) {
             return java.util.Optional.empty();
+        }
+
+        // Refuse to write a file the loader would then choke on. The merge only ever inserts, but an
+        // operator can hand this a file whose indentation makes the inserted block land somewhere it
+        // does not belong; parsing the result is a cheap way to find out before the damage is on disk.
+        final String rendered = String.join(newline, completed) + newline;
+        final String problem = ConfigCompleter.validation.check(rendered);
+        if (problem != null) {
+            throw new IOException("the completed " + file.getName() + " would not parse (" + problem
+                    + "); the file was left untouched");
         }
 
         // Rewriting an operator's file is worth an undo button, and this only happens when something
         // actually changes, so the backup cannot be overwritten on every start.
         final File backup = new File(file.getParentFile(), source + ".yml.bak");
         Files.copy(file.toPath(), backup.toPath(), StandardCopyOption.REPLACE_EXISTING);
-        Files.writeString(file.toPath(), String.join(newline, completed) + newline, StandardCharsets.UTF_8);
+        writeAtomically(file, rendered);
 
         return java.util.Optional.of(new Result(file, added, null));
+    }
+
+    /**
+     * Writes through a temporary file in the same directory, then moves it into place.
+     *
+     * <p>A plain write that is interrupted — full disk, a kill, a power cut — leaves a truncated config
+     * behind, and the backup taken a moment earlier would be the only copy. The move is atomic on the
+     * file systems these servers actually run on, so the file is either the old one or the new one.
+     */
+    private static void writeAtomically(final File file, final String contents) throws IOException {
+        final File temporary = new File(file.getParentFile(), file.getName() + ".tmp");
+        try {
+            Files.writeString(temporary.toPath(), contents, StandardCharsets.UTF_8);
+            Files.move(temporary.toPath(), file.toPath(),
+                    StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (final IOException exception) {
+            Files.deleteIfExists(temporary.toPath());
+            throw exception;
+        }
     }
 
     /**
@@ -146,19 +216,24 @@ final class ConfigCompleter {
         return result;
     }
 
-    /** The version the bundled file carries. Falls back to the last number seen, then to 0. */
-    private static int currentVersion(final List<String> defaults) {
+    /**
+     * The version the bundled file carries, or {@code -1} when it carries no marker.
+     *
+     * <p>Absence is not zero. A bundled file without a marker means this build has no version to stamp,
+     * and writing {@code config-version: 0} onto every server's file would be inventing one.
+     */
+    static int currentVersion(final List<String> defaults) {
         for (final String line : defaults) {
             final Matcher matcher = VERSION_LINE.matcher(line.strip());
             if (matcher.matches()) {
                 try {
                     return Integer.parseInt(matcher.group(1));
                 } catch (final NumberFormatException ignored) {
-                    break;
+                    return -1;
                 }
             }
         }
-        return 0;
+        return -1;
     }
 
     /** The completed lines plus the key paths that were inserted, for logging. */

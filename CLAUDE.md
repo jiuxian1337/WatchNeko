@@ -103,7 +103,9 @@ flag 链路：`Check.flag()` → `FlagEvent`（可取消）→ `PunishmentManage
 
 **配置补齐**：`ConfigCompleter` 在 `saveAllDefaults(false)` 之后、`loadAll` 之前运行，把 `en/zh` 资源里有、用户文件里没有的键（连同注释）插入 `config.yml` / `messages.yml` / `discord.yml`，插入前备份为 `*.yml.bak`。它只做插入：已有行不重写、不排序、不删除，第二次运行是 no-op。`punishments.yml` 刻意排除（用户自定义数据）。
 
-`config.yml` 末尾的 `config-version` 是**纯标记**：每次运行都从资源文件取值并强制写入（就地改写旧值、缺失则追加），**不用它决定补哪些键**——补齐永远看实际缺了什么。新增配置键时把它加进 en/zh 资源即可，不需要写迁移分支。曾经的 `upgrade()` 迁移体系从未被调用，已于 2026-10-28 删除，不要恢复。改动补齐逻辑时必须跑 `ConfigCompleterTest` 与 `ConfigCompleterShippedFilesTest`（后者用真实资源文件验证）。
+`config.yml` 末尾的 `config-version` 是**纯标记**：每次运行都从资源文件取值并强制写入（就地改写旧值、缺失则追加），**不用它决定补哪些键**——补齐永远看实际缺了什么。资源文件里没有标记时不写（`currentVersion` 返回 -1，不是 0）：没有版本可盖就不该在每台服务器上凭空写一个。新增配置键时把它加进 en/zh 资源即可，不需要写迁移分支。曾经的 `upgrade()` 迁移体系从未被调用，已于 2026-10-28 删除，不要恢复。
+
+写入前会用 SnakeYAML 解析一遍合并结果，解析失败就放弃写入并报错；写入走临时文件 + `ATOMIC_MOVE`。改动补齐逻辑时必须跑 `ConfigCompleterTest` 与 `ConfigCompleterShippedFilesTest`（后者用真实资源文件验证）。
 
 `/watchneko reload` → `WatchNekoExternalAPI.reloadAsync()` → 依次重载各 manager、重建 `CloudGateway`、再让在线玩家重载自己的 checks。数据库设置在文档里标注为需重启。
 
@@ -115,7 +117,7 @@ flag 链路：`Check.flag()` → `FlagEvent`（可取消）→ `PunishmentManage
 - `canInfer() == false` 不等于 `current() == null`：冷启动（云端可达、已认证、但还没有已发布模型）和特征维度不符都产生一个 **非 null 但不可推理**的 gateway。这个区别是刻意的——录制样本只需要可达的云端，把「无模型」当成不可用会让第一个模型永远训练不出来。这两种状态下 `/watchneko record` 仍然可用。
 - `AnalysisA`（RotationCheck）在攻击锚点处取 `RotationWindow`（22 维 = 11 次旋转更新 × yaw/pitch），攒批异步推理。云端裁决只变成**票**，是否告警由本地 `VerdictVotes` 按 `analysis-window-size` / `min-cheat-votes`（默认 10 / 8）决定——云端从不惩罚。429 不关检测，而是进入配额门控，只发有运动能量的窗口。
 - 录制会话（`/watchneko record start`）期间样本只进 `RecordingSession`，**不送推理**：训练数据不能影响它要训练的检测。玩家断线自动 pause，回来 resume。样本 id 以会话 id 为作用域，否则重连会撞上云端已有的 id。
-- 玩家名以**明文**随样本上行（无哈希、无 salt），用于归属与按名撤销；原始角度不出服务器，只有归一化后的 `features` 上线。
+- 玩家名以**明文**随样本上行（无哈希、无 salt），用于归属与按名撤销；原始角度不出服务器，只有归一化后的 `features` 上线。上传历史里的玩家名存在 `recording_sessions.players`，不查 `samples`——撤销会删样本，而"这批是谁的"正是撤销之后最该留住的记录。
 
 ### 契约纪律
 
@@ -123,9 +125,15 @@ flag 链路：`Check.flag()` → `FlagEvent`（可取消）→ `PunishmentManage
 
 ### 云端服务
 
-`app/` 分层：`main.py`（契约端点，只接受依赖注入）、`console.py` + `templates/`（服务端会话守卫；每个视图一个文档，非 SPA）、`schemas.py`（pydantic `extra="forbid"`）、`auth.py`（401 / 403 分开）、`tenants.py`（密钥只存 SHA-256）、`quota.py`、`store.py`（SQLite）、`dataset.py` / `train.py` / `publish.py` / `ops.py` / `scheduler.py`（训练 → 发布 → 回滚，健康判据是唯一刹车）、`metrics.py`。`serve.py` 是组合根。
+`app/` 分层：`main.py`（契约端点，只接受依赖注入）、`console.py` + `templates/`（服务端会话守卫；每个视图一个文档，非 SPA）、`admin_api.py` + `admin_auth.py`（控制台 API 与管理员会话，与租户密钥是两套身份）、`static/`（每个视图一个 `page-*.js` + 共享的 `console.js`）、`schemas.py`（pydantic `extra="forbid"`）、`auth.py`（401 / 403 分开）、`tenants.py`（密钥只存 SHA-256）、`quota.py`、`store.py`（SQLite）、`dataset.py` / `train.py` / `publish.py` / `ops.py` / `scheduler.py`（训练 → 发布 → 回滚，健康判据是唯一刹车）、`metrics.py`。`serve.py` 是组合根。
+
+新增一个控制台页面要同时改三处：`templates/<page>.html`、`static/page-<page>.js`、`console.py` 的 `NAV` 与 `PAGES`。`tests/test_console_pages.py` 会枚举页面列表，漏改会红。
+
+**存储迁移**：`store.py` 的 `_TABLES` / `_migrate()` / `_INDEXES` 三段**顺序是语义**——建表 → 迁移 → 建索引。`CREATE INDEX IF NOT EXISTS` 判的是索引名而不是列，所以把引用新列的索引写进建表段，会让**正好需要迁移的旧库**在建索引时因列不存在而启动失败（`no such column`）。新增列要同时改 `_TABLES`（新库）和 `_migrate()`（旧库），迁移必须可重入（按 `PRAGMA table_info` 判断列是否已存在）。改列名用 `ALTER TABLE ... RENAME COLUMN`，不要 DROP + 重建：前者会一并改写索引定义、保留主键，也不会在两条语句之间丢表。
 
 `conftest.py` 把 `cloud-service/` 塞进 `sys.path`，所以 `pytest` 不用安装包就能跑；测试从 `contract/fixtures` 按相对路径读取语料（`parents[2]`），**不要在 `cloud-service/` 里移动测试目录**。
+
+**测试要能在没有 Python 的机器上验证**：`test_config.py` 里有几个用例曾经假设 POSIX 路径语义（`/var/lib/wn.db` 在 Windows 上不是绝对路径），一跑就红，掩盖了真正的失败。写路径断言时用 `tmp_path`，不要写字面量绝对路径。
 
 ## 约定
 

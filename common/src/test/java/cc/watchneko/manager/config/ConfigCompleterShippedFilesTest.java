@@ -1,5 +1,6 @@
 package cc.watchneko.manager.config;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -39,23 +40,41 @@ class ConfigCompleterShippedFilesTest {
         }
     }
 
-    private static List<String> dropKeys(final List<String> lines, final String... prefixes) {
+    @AfterEach
+    void restoreValidation() {
+        ConfigCompleter.validation = ConfigCompleter.SNAKEYAML_VALIDATION;
+    }
+
+    /**
+     * Removes a top-level key, its children and its comment block, the way an older release's file simply
+     * would not have had it.
+     */
+    private static List<String> withoutKey(final List<String> lines, final String key) {
         final List<String> result = new java.util.ArrayList<>();
+        boolean dropping = false;
         for (final String line : lines) {
             final String trimmed = line.strip();
-            boolean drop = false;
-            for (final String prefix : prefixes) {
-                if (trimmed.startsWith(prefix + ":") || trimmed.startsWith("- ") && !result.isEmpty()) {
-                    // Only drop sequence items belonging to a dropped key; the flag below handles that.
+            final boolean isKeyLine = !trimmed.isEmpty()
+                    && !trimmed.startsWith("#")
+                    && !trimmed.startsWith("-")
+                    && line.length() - line.stripLeading().length() == 0
+                    && trimmed.startsWith(key + ":");
+            if (isKeyLine) {
+                dropping = true;
+                continue;
+            }
+            if (dropping) {
+                // The block ends at the next line that starts at column zero and is not a comment.
+                final boolean nextTopLevel = !trimmed.isEmpty()
+                        && !trimmed.startsWith("#")
+                        && line.length() - line.stripLeading().length() == 0;
+                if (nextTopLevel) {
+                    dropping = false;
+                } else {
                     continue;
                 }
-                if (trimmed.startsWith(prefix + ":")) {
-                    drop = true;
-                }
             }
-            if (!drop) {
-                result.add(line);
-            }
+            result.add(line);
         }
         return result;
     }
@@ -240,6 +259,76 @@ class ConfigCompleterShippedFilesTest {
                 github.scarsz.configuralize.Language.EN,
                 directory.toFile());
         assertEquals(once, Files.readString(config));
+    }
+
+    @Test
+    void a_marker_with_a_trailing_comment_is_rewritten_rather_than_duplicated() throws IOException {
+        // An operator annotating the line has not changed what it means. Appending a second marker would
+        // leave the file with two config-version keys, and the loader keeps whichever it sees last.
+        final Path config = directory.resolve("config.yml");
+        Files.writeString(config, "max-ping: 999\nconfig-version: 3 # 别动这行\n");
+
+        ConfigCompleter.completeAll(
+                ConfigCompleterShippedFilesTest.class,
+                github.scarsz.configuralize.Language.EN,
+                directory.toFile());
+
+        final String written = Files.readString(config);
+        assertTrue(written.contains("config-version: " + shippedVersion()));
+        assertEquals(1, written.split("config-version:", -1).length - 1,
+                "the file must carry exactly one marker");
+    }
+
+    @Test
+    void a_bundled_file_without_a_marker_reports_no_version() {
+        // -1, not 0: "this build has no version to stamp" is different from "version zero". Stamping 0
+        // would write a number onto every operator's file that nothing ever produced.
+        assertEquals(-1, ConfigCompleter.currentVersion(
+                withoutKey(resource("/config/en.yml"), "config-version")));
+        assertEquals(shippedVersion(), ConfigCompleter.currentVersion(resource("/config/en.yml")));
+    }
+
+    @Test
+    void an_invalid_result_is_refused_and_the_original_is_left_alone() throws IOException {
+        // The merge only inserts, so the way to make the result unparseable is to hand it a file the
+        // operator has already broken in a way the merge then extends. Whatever the cause, the rule is
+        // the same: a file that would not load must not replace one that still might.
+        final Path config = directory.resolve("config.yml");
+        final String original = "max-ping: 999\nAnalysisA:\n    batch-size: 4\n";
+        Files.writeString(config, original);
+        ConfigCompleter.validation = yaml -> "simulated parse failure";
+
+        final List<ConfigCompleter.Result> results = ConfigCompleter.completeAll(
+                ConfigCompleterShippedFilesTest.class,
+                github.scarsz.configuralize.Language.EN,
+                directory.toFile());
+
+        assertTrue(results.stream().anyMatch(ConfigCompleter.Result::failed),
+                "the failure must be reported, not swallowed");
+        assertEquals(original, Files.readString(config), "the operator's file must be untouched");
+        assertFalse(Files.exists(directory.resolve("config.yml.bak")),
+                "no backup either: nothing was about to change");
+    }
+
+    @Test
+    void the_completed_file_actually_parses() throws IOException {
+        // The shipped files are what the merge is run against, so their completion has to survive the
+        // same parser the loader uses — not just the hand-written expectations in the other tests.
+        final Path config = directory.resolve("config.yml");
+        Files.writeString(config, "max-ping: 999\nAnalysisA:\n    batch-size: 4\n");
+
+        ConfigCompleter.completeAll(
+                ConfigCompleterShippedFilesTest.class,
+                github.scarsz.configuralize.Language.EN,
+                directory.toFile());
+
+        final String written = Files.readString(config);
+        assertEquals(null, ConfigCompleter.SNAKEYAML_VALIDATION.check(written),
+                "the completed file must parse");
+        final Object parsed = new org.yaml.snakeyaml.Yaml().load(written);
+        assertTrue(parsed instanceof java.util.Map, "and must still be a mapping");
+        assertEquals(999, ((java.util.Map<?, ?>) parsed).get("max-ping"),
+                "with the operator's own value intact");
     }
 
     private static int shippedVersion() {
