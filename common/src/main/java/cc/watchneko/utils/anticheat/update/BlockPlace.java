@@ -1,6 +1,5 @@
 package cc.watchneko.utils.anticheat.update;
 
-import cc.watchneko.checks.impl.velocity.VelocityA;
 import cc.watchneko.player.PlayerData;
 import cc.watchneko.utils.anticheat.LogUtil;
 import cc.watchneko.utils.collisions.AxisSelect;
@@ -598,6 +597,7 @@ public class BlockPlace {
         }
 
         player.inventory.onBlockPlace(this);
+        player.checkManager.getKnockbackHandler().interacted = true;
         player.compensatedWorld.updateBlock(position.getX(), position.getY(), position.getZ(), state.getGlobalId());
     }
 

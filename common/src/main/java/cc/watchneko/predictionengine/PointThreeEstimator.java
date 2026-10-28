@@ -159,6 +159,12 @@ public class PointThreeEstimator {
         }
 
         if (pointThreeBox.isIntersected(new SimpleCollisionBox(x, y, z)) && !data.isNull()) {
+            // A player who just placed or consumed a block is interacting with the world, so the client's
+            // position is explained by that interaction rather than by skipped-tick knockback. Recomputing
+            // knockback/explosion here produced falses; the null-data guard above is a separate fix and
+            // does not cover this case.
+            VelocityA velocityA = player.checkManager.getKnockbackHandler();
+            if (!velocityA.interacted) {
                 // https://github.com/MWHunter/Grim/issues/613
                 int controllingEntityId = player.inVehicle() ? player.getRidingVehicleId() : player.entityID;
 
@@ -185,6 +191,7 @@ public class PointThreeEstimator {
                     player.likelyKB = oldLikelyKB;
                     player.firstBreadExplosion = oldFirstBreadEx;
                     player.likelyExplosions = oldLikelyEx;
+                }
             }
         }
 

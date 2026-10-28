@@ -6,7 +6,7 @@
 
 改完之后输入 `/watchneko reload` 生效（**数据库设置除外**，那个必须重启服务器）。
 
-> ⚠️ 文件末尾有一行 `config-version: 10`，**不要动它**。插件靠这个数字判断你的配置是不是旧版本，需要时自动升级。
+> ⚠️ 文件末尾有一行 `config-version: 11`，**不要动它**。插件靠这个数字判断你的配置是不是旧版本，需要时自动升级。
 
 ---
 
@@ -726,14 +726,20 @@ reset-item-usage-on-slot-change: true
 ```yaml
 packet-spam-threshold: 100
 debug-packet-cancel: false
+transaction-skip-limit: 50
 ```
 
 | 设置 | 说明 |
 |---|---|
 | `packet-spam-threshold` | 一秒内取消多少个非法数据包就**踢掉这个玩家** |
 | `debug-packet-cancel` | 玩家因此被踢时，是否打印堆栈追踪 |
+| `transaction-skip-limit` | 回复数据包时跳过多少个 tran/pong 就**踢掉这个玩家**；`-1` 关闭 |
 
 **为什么需要这个**：有些数据包限制器不计算被反作弊取消的数据包，外挂可以借此刷包。默认 100。
+
+`transaction-skip-limit` 针对的是靠静默丢弃 transaction 来滥用延迟补偿的绕过（例如某些客户端的 lag velocity）。玩家每 80ms 至少收到一个 transaction，所以 50 大约相当于**连续 2–4 秒**的丢包。
+
+> ⚠️ Mojang 客户端在网络卡顿时**确实会乱序**回复 transaction，所以高延迟玩家有被误踢的可能。实测下来正常玩家不会触发，但如果你的服务器延迟普遍很高，或者和别的插件/反作弊混装，建议调高这个值；实在拿不准就填 `-1` 关掉。
 
 ---
 

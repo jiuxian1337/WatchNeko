@@ -335,6 +335,7 @@ debug-packet-cancel: false
 # (你说的对，我在测试的时候确实遇到了数据包乱序问题,这只存在于MOJANG的愚蠢客户端实现)
 # 所以这还是有可能对高延迟的玩家进行打击的,但是正常不会有误判，除非插件兼容问题,比如装了其他反作弊
 # 这也会修复一些滥用延迟补偿的绕过
+# 填写-1则关闭
 transaction-skip-limit: 50
 
 # Grim 能够强制执行一个规则：被设置为非飞行状态的玩家的 ping 值不能超过 X 毫秒。这是因为 Grim 目前不检查处于飞行状态的玩家。
@@ -363,4 +364,4 @@ history:
         password: ""
 
 # 不要调整这个
-config-version: 10
+config-version: 11

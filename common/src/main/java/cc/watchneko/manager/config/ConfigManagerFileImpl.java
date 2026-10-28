@@ -81,7 +81,7 @@ public class ConfigManagerFileImpl implements ConfigManager, BasicReloadable {
 
                     configVersion = Integer.parseInt(configStringVersion);
                     // TODO: Do we have to hardcode this?
-                    configString = configString.replaceAll("config-version: " + configStringVersion, "config-version: 10");
+                    configString = configString.replaceAll("config-version: " + configStringVersion, "config-version: 11");
                     Files.write(config.toPath(), configString.getBytes());
 
                     upgradeModernConfig(config, configString, configVersion);
@@ -126,6 +126,20 @@ public class ConfigManagerFileImpl implements ConfigManager, BasicReloadable {
         if (configVersion < 10) {
             addCloudDetection(config, configString);
         }
+        if (configVersion < 11) {
+            addTransactionSkipLimit(config, configString);
+        }
+    }
+
+    private void addTransactionSkipLimit(File config, String configString) throws IOException {
+        configString += "\n\n\n" +
+                "# Kick a player when this many transaction/pong packets were skipped before the reply we received\n" +
+                "# (kick reason: invalid skip packet s= <n>). Mojang's client does reorder these under lag, so a very\n" +
+                "# high-ping player can be caught; in normal play this only fires for lag-compensation abuse.\n" +
+                "# This also closes some lag-compensation bypasses. To disable, use -1\n" +
+                "transaction-skip-limit: 50";
+
+        Files.write(config.toPath(), configString.getBytes());
     }
 
     private void addCloudDetection(File config, String configString) throws IOException {

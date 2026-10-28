@@ -1,6 +1,5 @@
 package cc.watchneko.utils.blockplace;
 
-import cc.watchneko.checks.impl.velocity.VelocityA;
 import cc.watchneko.player.PlayerData;
 import cc.watchneko.utils.anticheat.update.BlockPlace;
 import cc.watchneko.utils.collisions.AxisUtil;
@@ -20,6 +19,7 @@ import org.jetbrains.annotations.NotNull;
 @UtilityClass
 public class ConsumesBlockPlace {
     public static boolean consumesPlace(@NotNull PlayerData player, @NotNull WrappedBlockState state, @NotNull BlockPlace place) {
+        player.checkManager.getKnockbackHandler().interacted = true;
         // Hey look, it's another DESYNC MOJANG
         if (state.getType() == StateTypes.BELL) {
             return goodBellHit(state, place);

@@ -330,6 +330,11 @@ reset-item-usage-on-slot-change: true
 packet-spam-threshold: 100
 # Enable this to print a stacktrace when a player is kicked due to packet-spam-threshold
 debug-packet-cancel: false
+# Kick a player when this many transaction/pong packets were skipped before the reply we received
+# (kick reason: invalid skip packet s= <n>). Mojang's client does reorder these under lag, so a very
+# high-ping player can be caught; in normal play this only fires for lag-compensation abuse.
+# This also closes some lag-compensation bypasses. To disable, use -1
+transaction-skip-limit: 50
 
 # Grim is able to enforce that a player set out of flying state cannot have more than X milliseconds of ping
 # This is due to Grim not currently checking flying players
@@ -356,4 +361,4 @@ history:
         username: root
         password: ""
 
-config-version: 10
+config-version: 11

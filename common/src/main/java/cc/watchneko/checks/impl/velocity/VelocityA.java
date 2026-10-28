@@ -36,6 +36,13 @@ public class VelocityA extends Check implements PostPredictionCheck {
 
     double threshold;
 
+    /**
+     * Set when the player places or consumes a block this tick, cleared when the prediction completes.
+     * {@code PointThreeEstimator} uses it to skip the skipped-tick knockback/explosion recalculation:
+     * a client interacting with the world has a legitimate reason to deviate from the predicted movement,
+     * and recomputing knockback there produced falses.
+     */
+    public boolean interacted;
 
     public VelocityA(PlayerData player) {
         super(player);
@@ -174,6 +181,7 @@ public class VelocityA extends Check implements PostPredictionCheck {
 
     @Override
     public void onPredictionComplete(final PredictionComplete predictionComplete) {
+        interacted = false;
         double offset = predictionComplete.getOffset();
         if (!predictionComplete.isChecked() || predictionComplete.getData().isTeleport()) {
             forceExempt();

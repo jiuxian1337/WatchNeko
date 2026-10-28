@@ -441,10 +441,9 @@ public class PlayerData implements GrimUser {
 
             if (skipped > 0 && System.currentTimeMillis() - joinTime > 5000) {
                 checkManager.getCheck(TransactionOrder.class).flagAndAlert("skipped: " + skipped);
-                // 一些滥用延迟补偿的绕过修复
-                // 比如某客户端的Grim NoXZ velocity (这实际是lag velocity)
-                // TODO: 可配置这个
-                if (skipped > tranSkipThreshold) {
+                // Some lag-compensation bypasses (e.g. a client's "NoXZ velocity", which is really just
+                // lag velocity) rely on silently dropping transactions. A negative limit disables the kick.
+                if (tranSkipThreshold != -1 && skipped > tranSkipThreshold) {
                     disconnect(Component.text("invalid skip packet s= " + skipped));
                 }
             }
