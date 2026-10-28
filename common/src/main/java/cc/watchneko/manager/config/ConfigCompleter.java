@@ -39,8 +39,17 @@ final class ConfigCompleter {
     /** The files that get completed. {@code punishments.yml} is absent on purpose: it is user-defined data. */
     private static final String[] SOURCES = {"config", "messages", "discord"};
 
+    /** The file that carries the version marker. Only {@code config.yml} has one. */
+    private static final String VERSIONED_SOURCE = "config";
+
+    /** The marker key. Written on every run; never used to decide what to complete. */
+    private static final String VERSION_KEY = "config-version";
+
     /** A mapping key: leading spaces, the key, then anything (an inline value and/or a trailing comment). */
     private static final Pattern KEY = Pattern.compile("^( *)([A-Za-z0-9_.\\-]+):(.*)$");
+
+    /** A top-level version marker, matched anywhere so a stale one can be rewritten in place. */
+    private static final Pattern VERSION_LINE = Pattern.compile("^" + VERSION_KEY + ":\\s*(\\d*)\\s*$");
 
     private ConfigCompleter() {
     }
@@ -80,17 +89,76 @@ final class ConfigCompleter {
         final List<String> userLines = splitLines(text);
 
         final Merge merge = merge(userLines, defaults);
-        if (merge.added().isEmpty()) {
+        final List<String> added = new ArrayList<>(merge.added());
+
+        // The marker is forced to the current version every run, whether or not anything else changed.
+        // It is a record of which release last touched this file, not an input to the completion: an
+        // operator whose file claims a newer version still gets their missing keys.
+        final List<String> completed = source.equals(VERSIONED_SOURCE)
+                ? stampVersion(merge.lines(), currentVersion(defaults), added)
+                : merge.lines();
+
+        if (completed.equals(userLines)) {
             return java.util.Optional.empty();
         }
 
-        // Rewriting an operator's file is worth an undo button, and this only happens when there is
-        // something to add, so the backup cannot be overwritten on every start.
+        // Rewriting an operator's file is worth an undo button, and this only happens when something
+        // actually changes, so the backup cannot be overwritten on every start.
         final File backup = new File(file.getParentFile(), source + ".yml.bak");
         Files.copy(file.toPath(), backup.toPath(), StandardCopyOption.REPLACE_EXISTING);
-        Files.writeString(file.toPath(), String.join(newline, merge.lines()) + newline, StandardCharsets.UTF_8);
+        Files.writeString(file.toPath(), String.join(newline, completed) + newline, StandardCharsets.UTF_8);
 
-        return java.util.Optional.of(new Result(file, merge.added(), null));
+        return java.util.Optional.of(new Result(file, added, null));
+    }
+
+    /**
+     * Rewrites the {@code config-version} marker to {@code version}, adding it when absent.
+     *
+     * <p>A stale marker is replaced in place, so the operator does not end up with two of them and the
+     * key keeps its position at the end of the file. A file that already carries the right number is
+     * returned untouched, which is what keeps a second run a no-op.
+     */
+    static List<String> stampVersion(
+            final List<String> lines, final int version, final List<String> added) {
+        final String marker = VERSION_KEY + ": " + version;
+        final List<String> result = new ArrayList<>(lines);
+
+        for (int index = 0; index < result.size(); index++) {
+            if (VERSION_LINE.matcher(result.get(index)).matches()) {
+                if (!result.get(index).equals(marker)) {
+                    result.set(index, marker);
+                    if (!added.contains(VERSION_KEY)) {
+                        added.add(VERSION_KEY);
+                    }
+                }
+                return result;
+            }
+        }
+
+        while (!result.isEmpty() && result.get(result.size() - 1).isBlank()) {
+            result.remove(result.size() - 1);
+        }
+        if (!result.isEmpty()) {
+            result.add("");
+        }
+        result.add(marker);
+        added.add(VERSION_KEY);
+        return result;
+    }
+
+    /** The version the bundled file carries. Falls back to the last number seen, then to 0. */
+    private static int currentVersion(final List<String> defaults) {
+        for (final String line : defaults) {
+            final Matcher matcher = VERSION_LINE.matcher(line.strip());
+            if (matcher.matches()) {
+                try {
+                    return Integer.parseInt(matcher.group(1));
+                } catch (final NumberFormatException ignored) {
+                    break;
+                }
+            }
+        }
+        return 0;
     }
 
     /** The completed lines plus the key paths that were inserted, for logging. */

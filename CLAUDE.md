@@ -101,7 +101,9 @@ flag 链路：`Check.flag()` → `FlagEvent`（可取消）→ `PunishmentManage
 
 `configuralize` 的 `DynamicConfig` 加载 4 个文件（`config.yml`、`messages.yml`、`punishments.yml`、`discord.yml`），默认值来自 `common/src/main/resources/{config,messages,punishments,discord}/{en,zh}.yml`，按 `user.language` 系统属性选语言，缺失回退英文。改配置键要同时改 en / zh 两份资源与 `docs/config.md`。
 
-**配置补齐**：`ConfigCompleter` 在 `saveAllDefaults(false)` 之后、`loadAll` 之前运行，把 `en/zh` 资源里有、用户文件里没有的键（连同注释）插入 `config.yml` / `messages.yml` / `discord.yml`，插入前备份为 `*.yml.bak`。它只做插入：已有行不重写、不排序、不删除，第二次运行是 no-op。`punishments.yml` 刻意排除（用户自定义数据）。曾经的 `config-version` 迁移体系（`upgrade()`）从未被调用，已于 2026-10-28 删除——不要恢复那套"按版本号往文件末尾追加"的做法，补齐由 `ConfigCompleter` 统一负责。改动补齐逻辑时必须跑 `ConfigCompleterTest` 与 `ConfigCompleterShippedFilesTest`（后者用真实资源文件验证）。
+**配置补齐**：`ConfigCompleter` 在 `saveAllDefaults(false)` 之后、`loadAll` 之前运行，把 `en/zh` 资源里有、用户文件里没有的键（连同注释）插入 `config.yml` / `messages.yml` / `discord.yml`，插入前备份为 `*.yml.bak`。它只做插入：已有行不重写、不排序、不删除，第二次运行是 no-op。`punishments.yml` 刻意排除（用户自定义数据）。
+
+`config.yml` 末尾的 `config-version` 是**纯标记**：每次运行都从资源文件取值并强制写入（就地改写旧值、缺失则追加），**不用它决定补哪些键**——补齐永远看实际缺了什么。新增配置键时把它加进 en/zh 资源即可，不需要写迁移分支。曾经的 `upgrade()` 迁移体系从未被调用，已于 2026-10-28 删除，不要恢复。改动补齐逻辑时必须跑 `ConfigCompleterTest` 与 `ConfigCompleterShippedFilesTest`（后者用真实资源文件验证）。
 
 `/watchneko reload` → `WatchNekoExternalAPI.reloadAsync()` → 依次重载各 manager、重建 `CloudGateway`、再让在线玩家重载自己的 checks。数据库设置在文档里标注为需重启。
 

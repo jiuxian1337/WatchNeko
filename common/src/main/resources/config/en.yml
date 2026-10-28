@@ -370,3 +370,6 @@ history:
         username: root
         password: ""
 
+
+# Do not edit this line: the plugin rewrites it with the current version on startup.
+config-version: 12

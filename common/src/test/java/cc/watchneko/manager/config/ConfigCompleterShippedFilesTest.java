@@ -166,4 +166,89 @@ class ConfigCompleterShippedFilesTest {
         assertTrue(written.contains("transaction-skip-limit:"), "missing key must be added");
         assertFalse(written.replace("\r\n", "").contains("\n"), "every line break must stay CRLF");
     }
+
+    // -- the version marker -------------------------------------------------------------------------
+
+    @Test
+    void a_missing_version_marker_is_written() throws IOException {
+        final Path config = directory.resolve("config.yml");
+        Files.writeString(config, "max-ping: 999\n");
+
+        ConfigCompleter.completeAll(
+                ConfigCompleterShippedFilesTest.class,
+                github.scarsz.configuralize.Language.EN,
+                directory.toFile());
+
+        final String written = Files.readString(config);
+        assertTrue(written.contains("config-version: "), "the marker must be written");
+        assertTrue(written.stripTrailing().endsWith("config-version: " + shippedVersion()),
+                "the marker must be the last line and carry the shipped version");
+    }
+
+    @Test
+    void a_stale_version_marker_is_rewritten_in_place() throws IOException {
+        final Path config = directory.resolve("config.yml");
+        Files.writeString(config, "max-ping: 999\nconfig-version: 3\nother: 1\n");
+
+        ConfigCompleter.completeAll(
+                ConfigCompleterShippedFilesTest.class,
+                github.scarsz.configuralize.Language.EN,
+                directory.toFile());
+
+        final String written = Files.readString(config);
+        assertTrue(written.contains("config-version: " + shippedVersion()));
+        assertFalse(written.contains("config-version: 3"), "the old number must be gone");
+        assertTrue(written.indexOf("other: 1") > written.indexOf("config-version:"),
+                "the marker keeps its position rather than moving to the end");
+        assertTrue(written.contains("max-ping: 999"), "operator values survive");
+    }
+
+    @Test
+    void the_marker_is_forced_even_when_the_file_claims_a_newer_version() throws IOException {
+        // Completion does not depend on the marker: a file claiming a future version still gets its keys.
+        final Path config = directory.resolve("config.yml");
+        Files.writeString(config, "max-ping: 999\nconfig-version: 999\n");
+
+        ConfigCompleter.completeAll(
+                ConfigCompleterShippedFilesTest.class,
+                github.scarsz.configuralize.Language.EN,
+                directory.toFile());
+
+        final String written = Files.readString(config);
+        assertTrue(written.contains("transaction-skip-limit:"), "keys are completed regardless of version");
+        assertTrue(written.contains("config-version: " + shippedVersion()), "and the marker is corrected");
+        assertFalse(written.contains("config-version: 999"));
+    }
+
+    @Test
+    void a_complete_file_still_gets_its_marker_stamped_once() throws IOException {
+        final Path config = directory.resolve("config.yml");
+        final String shipped = String.join("\n", resource("/config/en.yml")).replace(
+                "config-version: " + shippedVersion(), "config-version: 1");
+        Files.writeString(config, shipped);
+
+        ConfigCompleter.completeAll(
+                ConfigCompleterShippedFilesTest.class,
+                github.scarsz.configuralize.Language.EN,
+                directory.toFile());
+        final String once = Files.readString(config);
+        assertTrue(once.contains("config-version: " + shippedVersion()));
+
+        // Second run is a no-op: nothing left to add, marker already correct.
+        ConfigCompleter.completeAll(
+                ConfigCompleterShippedFilesTest.class,
+                github.scarsz.configuralize.Language.EN,
+                directory.toFile());
+        assertEquals(once, Files.readString(config));
+    }
+
+    private static int shippedVersion() {
+        for (final String line : resource("/config/en.yml")) {
+            final String trimmed = line.strip();
+            if (trimmed.startsWith("config-version:")) {
+                return Integer.parseInt(trimmed.substring("config-version:".length()).trim());
+            }
+        }
+        throw new AssertionError("the shipped config must carry a config-version marker");
+    }
 }
