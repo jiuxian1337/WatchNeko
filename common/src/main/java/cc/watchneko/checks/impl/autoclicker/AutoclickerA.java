@@ -5,7 +5,7 @@ import cc.watchneko.checks.Check;
 import cc.watchneko.checks.CheckData;
 import cc.watchneko.checks.type.PacketCheck;
 import cc.watchneko.player.PlayerData;
-import cc.watchneko.utils.math.MathUtil;
+import cc.watchneko.utils.math.Statistics;
 import com.github.retrooper.packetevents.event.PacketReceiveEvent;
 import com.github.retrooper.packetevents.protocol.packettype.PacketType;
 import com.github.retrooper.packetevents.protocol.player.DiggingAction;
@@ -13,9 +13,7 @@ import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientIn
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientPlayerDigging;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Ported behaviour from MX-Project AutoClickerCheck.
@@ -31,6 +29,7 @@ public final class AutoclickerA extends Check implements PacketCheck {
 
     // MX-style defaults
     private static final int DEFAULT_MAX_DELAY_TICKS = 25;
+    private static final long TELEPORT_GRACE_MS = 500L;
     private static final int DEFAULT_STACK_SIZE = 100;
     private static final int DEFAULT_WINDOW_SIZE = 20;
     private static final long DEFAULT_REQUIRE_MOVE_WITHIN_MS = 500L;
@@ -56,26 +55,6 @@ public final class AutoclickerA extends Check implements PacketCheck {
 
     public AutoclickerA(final PlayerData player) {
         super(player);
-    }
-
-    private static double shannonEntropy(final List<Double> values) {
-        if (values.isEmpty()) {
-            return 0.0;
-        }
-
-        final Map<Integer, Integer> counts = new HashMap<>();
-        for (double v : values) {
-            int k = (int) v;
-            counts.put(k, counts.getOrDefault(k, 0) + 1);
-        }
-
-        final int n = values.size();
-        double entropy = 0.0;
-        for (int c : counts.values()) {
-            final double p = c / (double) n;
-            entropy -= p * (Math.log(p) / Math.log(2));
-        }
-        return entropy;
     }
 
     private static int clamp(int v, int min, int max) {
@@ -131,6 +110,14 @@ public final class AutoclickerA extends Check implements PacketCheck {
             return;
         }
 
+        // The reference implementation refuses to sample for 500 ms after a teleport, because the client
+        // stops producing swing packets for a moment while it reconciles the new position and the gaps
+        // that leaves look exactly like a macro's steady delay.
+        if (System.currentTimeMillis() - player.lastServerTeleport < TELEPORT_GRACE_MS) {
+            oldTime = System.currentTimeMillis();
+            return;
+        }
+
         final long now = System.currentTimeMillis();
         final long delayTicks = (now - oldTime) / 50L;
         oldTime = now;
@@ -165,18 +152,16 @@ public final class AutoclickerA extends Check implements PacketCheck {
         for (long delay : stack) {
             localDelta.add((double) delay);
             if (localDelta.size() >= windowSize) {
-                kurtosisStack.add(MathUtil.getKurtosis(localDelta, false));
-                shannonStack.add(shannonEntropy(localDelta));
+                // Statistics.getKurtosis is the reference implementation's own estimator. MathUtil's
+                // two-argument overload computes m4/sigma^4 - 3, which is a different statistic and does
+                // not compare against zero the same way.
+                kurtosisStack.add(Statistics.getKurtosis(localDelta));
+                shannonStack.add(Statistics.getShannonEntropy(localDelta));
                 localDelta.clear();
             }
         }
 
-        if (kurtosisStack.isEmpty()) {
-            stack.clear();
-            return;
-        }
-
-        final double maxKurtosis = MathUtil.getMax(kurtosisStack);
+        final double maxKurtosis = Statistics.getMax(kurtosisStack);
         if (maxKurtosis < 0.0) {
             if (flagAndAlert(String.format("t=mx-kurtosis max=%.3f n=%d", maxKurtosis, stack.size()))) {
                 player.mitigateDamage();
@@ -186,10 +171,10 @@ public final class AutoclickerA extends Check implements PacketCheck {
             }
         }
 
-        final List<Float> jiff = MathUtil.getJiffDelta(shannonStack, 2);
+        final List<Float> jiff = Statistics.getJiffDelta(shannonStack, 2);
         if (!jiff.isEmpty()) {
-            final double min = MathUtil.getMin(jiff);
-            final double max = MathUtil.getMax(jiff);
+            final double min = Statistics.getMin(jiff);
+            final double max = Statistics.getMax(jiff);
 
             if (min < entropyJiffMin && max < entropyJiffMax) {
                 if (!entropyQuery) {

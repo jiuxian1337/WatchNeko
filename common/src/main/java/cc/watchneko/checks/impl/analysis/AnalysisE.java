@@ -1,47 +1,78 @@
-package cc.watchneko.analysis.aim.heuristic;
+package cc.watchneko.checks.impl.analysis;
 
-import cc.watchneko.checks.impl.aim.AimAA;
+import ac.grim.grimac.api.config.ConfigManager;
+import cc.watchneko.analysis.aim.AimHeuristicGate;
+import cc.watchneko.checks.Check;
+import cc.watchneko.checks.CheckData;
 import cc.watchneko.checks.impl.aim.processor.AimProcessor;
+import cc.watchneko.checks.type.RotationCheck;
 import cc.watchneko.player.PlayerData;
 import cc.watchneko.utils.anticheat.update.RotationUpdate;
 import cc.watchneko.utils.math.Simplification;
 import cc.watchneko.utils.math.Statistics;
 
-public final class AimHeuristicConstantCheck implements HeuristicComponent {
+/**
+ * Constant-rotation detection from MX's {@code AimConstantCheck}: three tests on whether consecutive
+ * rotation deltas share a common divisor, which is what a client that feeds the same mouse increment
+ * through every frame looks like.
+ *
+ * <p>Punishes without adding global VL upstream, so it lives in the {@code NoPenalty} group; what it does
+ * instead is suppress outgoing damage for four seconds, the same window upstream blocks attacks for.
+ */
+@CheckData(
+        name = "AnalysisE",
+        configName = "AnalysisE",
+        description = "constant rotation deltas sharing a common divisor",
+        decay = 0.05
+)
+public final class AnalysisE extends Check implements RotationCheck {
+
     private static final double MODULO_THRESHOLD = 60.0;
     private static final double LINEAR_THRESHOLD = 0.1;
     private static final float MIN_DELTA = 0.1f;
     private static final float MAX_DELTA = 20.0f;
-    private static final float CONSTANT1_NEED_VL = 8;
-    private static final float CONSTANT2_NEED_VL = 6;
-    private static final float CONSTANT3_NEED_VL = 6;
 
-    private final AimAA check;
-    private float lastDeltaYaw = 0.0f, lastDeltaPitch = 0.0f;
-    private float buffer = 0, buffer2 = 0, buffer3 = 0;
 
-    public AimHeuristicConstantCheck(final AimAA check) {
-        this.check = check;
+    private float lastDeltaYaw;
+    private float lastDeltaPitch;
+    private float buffer;
+    private float buffer2;
+    private float buffer3;
+
+    private float constant1NeedVl = 8;
+    private float constant2NeedVl = 6;
+    private float constant3NeedVl = 6;
+    private long mitigateDamageMs = 4000L;
+
+    public AnalysisE(final PlayerData player) {
+        super(player);
     }
 
     @Override
-    public void process(final RotationUpdate event) {
-        if (event.getDeltaXRotABS() == 0 && event.getDeltaYRotABS() == 0) return;
+    public void onReload(final ConfigManager config) {
+        constant1NeedVl = (float) config.getDoubleElse("AnalysisE.constant1-need-vl", constant1NeedVl);
+        constant2NeedVl = (float) config.getDoubleElse("AnalysisE.constant2-need-vl", constant2NeedVl);
+        constant3NeedVl = (float) config.getDoubleElse("AnalysisE.constant3-need-vl", constant3NeedVl);
+        mitigateDamageMs = Math.max(0L, (long) config.getDoubleElse("AnalysisE.mitigate-damage-ms", mitigateDamageMs));
+    }
 
-        final float deltaYaw = Math.abs(Math.abs(event.getTo().getYaw()) - Math.abs(event.getFrom().getYaw()));
-        final float deltaPitch = Math.abs(Math.abs(event.getTo().getPitch()) - Math.abs(event.getFrom().getPitch()));
-
-        // 原 function.allowed-cinematic 配置项已移除，固定按默认值 true：
-        // 原条件为 `isCinematic2() && allowed`，allowed 恒为 true，等同于只判断 isCinematic2()
-        if (event.isCinematic2()) {
+    @Override
+    public void process(final RotationUpdate update) {
+        if (AimHeuristicGate.blocks(player)) {
+            return;
+        }
+        if (AimHeuristicGate.noPitchChange(update)) {
             return;
         }
 
-        final PlayerData player = check.getPlayer();
+        final float deltaYaw = Math.abs(Math.abs(update.getTo().getYaw()) - Math.abs(update.getFrom().getYaw()));
+        final float deltaPitch = Math.abs(Math.abs(update.getTo().getPitch()) - Math.abs(update.getFrom().getPitch()));
+
         final double sensitivity = player.calculateSensitivity();
         final AimProcessor aimProcessor = player.checkManager.getRotationCheck(AimProcessor.class);
         final boolean sensitivityTooLow = sensitivity < 50.0 && sensitivity > -1.0
                 || (aimProcessor != null && aimProcessor.totalSensitivityClient < 50);
+
         final double divisorYaw = Statistics.getGcd(
                 (long) (deltaYaw * Statistics.EXPANDER),
                 (long) (lastDeltaYaw * Statistics.EXPANDER));
@@ -54,18 +85,17 @@ public final class AimHeuristicConstantCheck implements HeuristicComponent {
 
         // type 1
         {
-            final long expandedPitch = (long) (Statistics.EXPANDER * deltaPitch);
-            final long expandedLastPitch = (long) (Statistics.EXPANDER * lastDeltaPitch);
-            final long gcd = Statistics.getGcd(expandedPitch, expandedLastPitch);
+            final long gcd = Statistics.getGcd(
+                    (long) (Statistics.EXPANDER * deltaPitch),
+                    (long) (Statistics.EXPANDER * lastDeltaPitch));
             final boolean validAngles = deltaYaw > 0.25f && deltaPitch > 0.25f
                     && deltaPitch < MAX_DELTA && deltaYaw < MAX_DELTA;
-            final boolean invalid = gcd < 131072L;
 
-            if (invalid && validAngles && !sensitivityTooLow) {
+            if (gcd < 131072L && validAngles && !sensitivityTooLow) {
                 buffer = Math.min(buffer + 1, 200);
-                if (buffer > CONSTANT1_NEED_VL + 2) {
-                    if (check.flagAndAlert("* Constant rotations (1)")) {
-                        check.getPlayer().mitigateDamage();
+                if (buffer > constant1NeedVl + 2) {
+                    if (flagAndAlert("constant rotations (1)") && mitigateDamageMs > 0) {
+                        player.mitigateDamage(mitigateDamageMs);
                     }
                     buffer = 4;
                 }
@@ -87,7 +117,6 @@ public final class AimHeuristicConstantCheck implements HeuristicComponent {
             if (validDelta) {
                 final double moduloX = currentX % previousX;
                 final double moduloY = currentY % previousY;
-
                 final double floorModuloX = Math.abs(Math.floor(moduloX) - moduloX);
                 final double floorModuloY = Math.abs(Math.floor(moduloY) - moduloY);
 
@@ -96,9 +125,9 @@ public final class AimHeuristicConstantCheck implements HeuristicComponent {
 
                 if (invalidX && invalidY && !sensitivityTooLow) {
                     buffer2 = Math.min(buffer2 + 1, 200);
-                    if (buffer2 > CONSTANT2_NEED_VL) {
-                        if (check.flagAndAlert("* Constant rotations (2)")) {
-                            check.getPlayer().mitigateDamage();
+                    if (buffer2 > constant2NeedVl) {
+                        if (flagAndAlert("constant rotations (2)") && mitigateDamageMs > 0) {
+                            player.mitigateDamage(mitigateDamageMs);
                         }
                         buffer2 = 4;
                     }
@@ -121,7 +150,6 @@ public final class AimHeuristicConstantCheck implements HeuristicComponent {
             if (validDelta) {
                 final double moduloX = currentX % previousX;
                 final double moduloY = currentY % previousY;
-
                 final double floorModuloX = Math.abs(Math.floor(moduloX) - moduloX);
                 final double floorModuloY = Math.abs(Math.floor(moduloY) - moduloY);
 
@@ -130,10 +158,11 @@ public final class AimHeuristicConstantCheck implements HeuristicComponent {
 
                 if (invalidX && invalidY && !sensitivityTooLow) {
                     buffer3 = Math.max(buffer3 + ((deltaPitch < 1 || deltaPitch > 13) ? 2f : 1), 0);
-                    final float limit = CONSTANT3_NEED_VL + 1;
+                    final float limit = constant3NeedVl + 1;
                     if (buffer3 > ((sensitivity < 70) ? limit + 1 : limit)) {
-                        if (check.flagAndAlert("* Constant rotations (3) p=" + Simplification.scaleVal(deltaPitch, 3))) {
-                            check.getPlayer().mitigateDamage();
+                        if (flagAndAlert("constant rotations (3) p=" + Simplification.scaleVal(deltaPitch, 3))
+                                && mitigateDamageMs > 0) {
+                            player.mitigateDamage(mitigateDamageMs);
                         }
                         buffer3 = 0;
                     }

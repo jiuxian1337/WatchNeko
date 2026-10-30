@@ -9,7 +9,6 @@ import cc.watchneko.checks.type.RotationCheck;
 import cc.watchneko.cloud.CloudContractException;
 import cc.watchneko.cloud.CloudGateway;
 import cc.watchneko.cloud.FeatureSample;
-import cc.watchneko.cloud.InferenceResult;
 import cc.watchneko.cloud.RecordingSession;
 import cc.watchneko.cloud.RecordingSessions;
 import cc.watchneko.cloud.SampleIdentity;
@@ -61,6 +60,7 @@ public final class AnalysisA extends Check implements RotationCheck, AttackSigna
     private long quotaCooldownMs = 30_000L;
     private int batchSize = 8;
     private long sampleCounter;
+    private long mitigateDamageMs = 5000L;
 
     public AnalysisA(final PlayerData player) {
         super(player);
@@ -73,21 +73,20 @@ public final class AnalysisA extends Check implements RotationCheck, AttackSigna
         batchSize = Math.max(1, config.getIntElse("AnalysisA.batch-size", 8));
         gateMinEnergy = Math.max(0.0, config.getDoubleElse("AnalysisA.local-gate-min-energy", 1.25));
         quotaCooldownMs = Math.max(1L, config.getIntElse("AnalysisA.quota-cooldown-ms", 30_000));
+        mitigateDamageMs = Math.max(0L, (long) config.getDoubleElse("AnalysisA.mitigate-damage-ms", mitigateDamageMs));
 
         final int windowSize = Math.max(1, config.getIntElse("AnalysisA.analysis-window-size", 10));
         final int minCheatVotes = Math.max(1, config.getIntElse("AnalysisA.min-cheat-votes", 8));
         votes = new VerdictVotes(windowSize, minCheatVotes);
 
+        // Check's constructor calls reload() from inside super(), before this class's field
+        // initializers have run, so on that first pass every collection below is still null and
+        // there is no state to drop anyway. They are all created in the same initializer block,
+        // so testing one is enough.
         if (window != null) {
             window.clear();
-        }
-        if (pendingAnchors != null) {
             pendingAnchors.clear();
-        }
-        if (batch != null) {
             batch.clear();
-        }
-        if (incomingVerdicts != null) {
             incomingVerdicts.clear();
         }
     }
@@ -217,6 +216,7 @@ public final class AnalysisA extends Check implements RotationCheck, AttackSigna
 
         if (flagAndAlert("cloud votes=" + votes.cheatVotes() + "/" + votes.size())) {
             votes.clear();
+            player.mitigateDamage(mitigateDamageMs);
         }
     }
 
@@ -237,37 +237,5 @@ public final class AnalysisA extends Check implements RotationCheck, AttackSigna
             return;
         }
         LogUtil.info("[AnalysisA] " + player.getName() + " " + message);
-    }
-
-    /** Exposed for tests: the vote window in effect. */
-    VerdictVotes votes() {
-        return votes;
-    }
-
-    /** Exposed for tests: the pending sample buffer. */
-    List<FeatureSample> pendingBatch() {
-        return batch;
-    }
-
-    /** Exposed for tests: how many attacks are waiting for their window to complete. */
-    int pendingAnchorCount() {
-        return pendingAnchors.size();
-    }
-
-    /** Exposed for tests: feeds a verdict as the network callback would. */
-    void acceptVerdict(final VerdictLabel label) {
-        incomingVerdicts.add(label);
-    }
-
-    /** Exposed for tests: the window this check keeps. */
-    RotationWindow rotationWindow() {
-        return window;
-    }
-
-    /** Exposed for tests: unused result guard so the compiler keeps the import honest. */
-    static void ignore(final InferenceResult result) {
-        if (result == null) {
-            throw new IllegalArgumentException("result");
-        }
     }
 }

@@ -437,6 +437,20 @@ public class CheckManagerListener extends PacketListenerAbstract {
         return false;
     }
 
+    /**
+     * Whether this packet claims a position meaningfully different from the one the server holds.
+     *
+     * <p>The tolerance matches the reference implementation's {@code distance > 1e-4} check. It filters
+     * the float-noise packets some clients send on a stationary tick, which would otherwise look like
+     * movement with no rotation.
+     */
+    private static boolean positionMoved(PlayerData player, double x, double y, double z) {
+        final double dx = x - player.x;
+        final double dy = y - player.y;
+        final double dz = z - player.z;
+        return dx * dx + dy * dy + dz * dz > 1e-8;
+    }
+
     private static void handleFlying(PlayerData player, double x, double y, double z, float yaw, float pitch, boolean hasPosition, boolean hasLook, boolean onGround, TeleportAcceptData teleportData, PacketReceiveEvent event) {
         long now = System.currentTimeMillis();
 
@@ -496,6 +510,12 @@ public class CheckManagerListener extends PacketListenerAbstract {
 
             final RotationUpdate update = new RotationUpdate(new HeadRotation(player.lastXRot, player.lastYRot), new HeadRotation(player.xRot, player.yRot), deltaXRot, deltaYRot);
             player.checkManager.onRotationUpdate(update);
+        } else if (hasPosition && positionMoved(player, x, y, z)) {
+            // A movement packet with no rotation still occupies a tick. Checks that reason about the gaps
+            // between rotations need to know one passed, and the rotation sequence deliberately does not
+            // count it, so this is a separate, narrower signal. The movement requirement matches the
+            // reference implementation, which only synthesises the event when the position actually moved.
+            player.checkManager.onNoRotationUpdate();
         }
 
         if (hasPosition) {

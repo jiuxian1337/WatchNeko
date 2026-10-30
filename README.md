@@ -21,6 +21,10 @@
 
 ---
 
+> **本项目基于 [Grim](https://github.com/GrimAnticheat/Grim) 修改而来**，遵循 GPLv3。上游作者为 DefineOutside 及 Grim 贡献者。
+
+---
+
 ## 📺 视频教程（新手推荐先看这个）
 
 **[[免费开源] WatchNeko 反作弊使用教程](https://www.bilibili.com/video/BV1pZa46cE81)** — 从下载到装好，全程演示。
@@ -87,7 +91,9 @@
 
 ## 🖥️ 支持
 
-Paper / Spigot / Purpur / Folia · Minecraft 1.8 – 1.21 · 手机版（基岩版）服务器
+Paper / Spigot / Purpur / Folia · Minecraft 1.8 – 1.21
+
+基岩版玩家（Geyser / Floodgate）会被自动豁免，不运行任何检测。
 
 ## ⚙️ 配置文件详解
 
@@ -140,12 +146,12 @@ Paper / Spigot / Purpur / Folia · Minecraft 1.8 – 1.21 · 手机版（基岩�
 <details>
 <summary><b>English</b></summary>
 
-**WatchNeko** — a free Minecraft anticheat for Paper / Spigot / Folia, supporting **1.8 – 1.21**.
+**WatchNeko** — a free Minecraft anticheat for Paper / Spigot / Folia, supporting **1.8 – 1.21**. Bedrock players (Geyser / Floodgate) are exempt.
 
 Catches **170+ cheats**: Killaura, AimBot, Reach, Scaffold, Fly, Speed, NoFall, Timer, ElytraFly and more. It never bans — it alerts you and kicks players past a threshold, all configurable in `punishments.yml`.
 
 **Install:** download the `.jar` from [Releases](https://github.com/jiuxian1337/WatchNeko/releases/latest), drop it in `plugins`, restart. Do not run alongside Grim or EdGrim.
 
-Licensed under **GPLv3**.
+Licensed under **GPLv3**. Based on [Grim](https://github.com/GrimAnticheat/Grim) by DefineOutside and contributors.
 
 </details>

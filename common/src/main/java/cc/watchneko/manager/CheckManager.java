@@ -7,6 +7,20 @@ import cc.watchneko.checks.impl.aim.processor.AimProcessor;
 import cc.watchneko.checks.impl.aim.processor.Cinematic;
 import cc.watchneko.checks.impl.autoclicker.AutoclickerA;
 import cc.watchneko.checks.impl.analysis.AnalysisA;
+import cc.watchneko.checks.impl.analysis.AnalysisB;
+import cc.watchneko.checks.impl.analysis.AnalysisC;
+import cc.watchneko.checks.impl.analysis.AnalysisD;
+import cc.watchneko.checks.impl.analysis.AnalysisE;
+import cc.watchneko.checks.impl.analysis.AnalysisF;
+import cc.watchneko.checks.impl.analysis.AnalysisG;
+import cc.watchneko.checks.impl.analysis.AnalysisH;
+import cc.watchneko.checks.impl.analysis.AnalysisI;
+import cc.watchneko.checks.impl.analysis.AnalysisJ;
+import cc.watchneko.checks.impl.analysis.AnalysisK;
+import cc.watchneko.checks.impl.analysis.AnalysisL;
+import cc.watchneko.checks.impl.analysis.AnalysisM;
+import cc.watchneko.checks.impl.analysis.AnalysisN;
+import cc.watchneko.checks.impl.analysis.AnalysisO;
 import cc.watchneko.checks.impl.badpackets.*;
 import cc.watchneko.checks.impl.breaking.*;
 import cc.watchneko.checks.impl.chat.ChatA;
@@ -115,7 +129,7 @@ public class CheckManager {
                 .put(ActionManager.class, player.actionManager)
                 .put(TeamHandler.class, new TeamHandler(player))
                 .put(ClientBrand.class, new ClientBrand(player))
-                .put(AimW.class, new AimW(player))
+                .put(AimV.class, new AimV(player))
                 .put(NoFallA.class, new NoFallA(player))
                 .put(ChatA.class, new ChatA(player))
                 .put(ChatB.class, new ChatB(player))
@@ -177,16 +191,11 @@ public class CheckManager {
                 .put(AimP.class, new AimP(player))
                 .put(AimH.class, new AimH(player))
                 .put(AimM.class, new AimM(player))
-                .put(AimF.class, new AimF(player))
-                .put(AimO.class, new AimO(player))
                 .put(AimB.class, new AimB(player))
                 .put(AimS.class, new AimS(player))
-                .put(AimX.class, new AimX(player))
-                .put(AimL.class, new AimL(player))
-                .put(AimT.class, new AimT(player))
+                .put(AimW.class, new AimW(player))
                 .put(AimC.class, new AimC(player))
                 .put(AimN.class, new AimN(player))
-                .put(AimV.class, new AimV(player))
                 .put(AimA.class, new AimA(player))
                 .put(AimR.class, new AimR(player))
                 .put(AimQ.class, new AimQ(player))
@@ -195,12 +204,16 @@ public class CheckManager {
                 .put(AimJ.class, new AimJ(player))
                 .put(AimD.class, new AimD(player))
                 .put(AimE.class, new AimE(player))
-                .put(AimI.class, new AimI(player))
-                .put(AimY.class, new AimY(player))
-                .put(AimZ.class, new AimZ(player))
-                .put(AimAA.class, new AimAA(player))
-                .put(AimAB.class, new AimAB(player))
                 .put(AnalysisA.class, new AnalysisA(player))
+                .put(AnalysisB.class, new AnalysisB(player))
+                .put(AnalysisE.class, new AnalysisE(player))
+                .put(AnalysisF.class, new AnalysisF(player))
+                .put(AnalysisG.class, new AnalysisG(player))
+                .put(AnalysisH.class, new AnalysisH(player))
+                .put(AnalysisI.class, new AnalysisI(player))
+                .put(AnalysisJ.class, new AnalysisJ(player))
+                .put(AnalysisM.class, new AnalysisM(player))
+                .put(BadPacketsZ.class, new BadPacketsZ(player))
                 .build();
         vehicleChecks = new ImmutableClassToInstanceMap.Builder<VehicleCheck>()
                 .put(VehiclePredictionRunner.class, new VehiclePredictionRunner(player))
@@ -311,6 +324,14 @@ public class CheckManager {
                 .put(TransactionOrder.class, new TransactionOrder(player))
                 .put(VehicleC.class, new VehicleC(player))
                 .put(Hitboxes.class, new Hitboxes(player)) // Hitboxes is invoked by Reach
+                // The two basic-heuristic scores are flagged by AnalysisB, which owns the sample window.
+                .put(AnalysisC.class, new AnalysisC(player))
+                .put(AnalysisD.class, new AnalysisD(player))
+                // Same shape for the statistics and complex families: the parent owns the window.
+                .put(AnalysisK.class, new AnalysisK(player))
+                .put(AnalysisL.class, new AnalysisL(player))
+                .put(AnalysisN.class, new AnalysisN(player))
+                .put(AnalysisO.class, new AnalysisO(player))
                 .build();
 
         allChecks = new ImmutableClassToInstanceMap.Builder<AbstractCheck>()
@@ -406,6 +427,18 @@ public class CheckManager {
         }
         for (BlockPlaceCheck check : blockPlaceChecks.values()) {
             check.process(rotation);
+        }
+    }
+
+    /**
+     * Tells every rotation check that this packet moved the player without rotating.
+     *
+     * <p>Kept out of {@link #onRotationUpdate} on purpose: the rotation sequence position must keep
+     * counting real rotations only, or every attack anchor would drift.
+     */
+    public void onNoRotationUpdate() {
+        for (RotationCheck check : rotationChecks.values()) {
+            check.onNoRotation();
         }
     }
 

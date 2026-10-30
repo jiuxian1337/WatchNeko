@@ -242,6 +242,23 @@ public class PlayerData implements GrimUser {
     public Vector3d bedPosition;
     public long lastBlockPlaceUseItem = 0;
     public long lastBlockBreak = 0;
+    /**
+     * When the server last sent this player a position-and-look packet.
+     *
+     * <p>Distinct from {@link cc.watchneko.utils.data.PacketStateData#lastPacketWasTeleport}, which only
+     * marks the single client packet that acknowledged a teleport. Checks that need a grace window after a
+     * teleport — the client is known to produce garbage rotations for a moment — need the send time, not
+     * the acknowledgement.
+     */
+    public long lastServerTeleport = 0;
+    /**
+     * Set when a teleport is sent, cleared once the first rotation packet after it has been handled.
+     *
+     * <p>This is the reference implementation's {@code ignoreFirstTick}. It is a one-shot flag rather
+     * than a time window on purpose: the packet the client produces immediately after reconciling a
+     * teleport is the unreliable one, and it may arrive well after the teleport or not at all.
+     */
+    public boolean ignoreNextRotation;
     public MainSupportingBlockData mainSupportingBlockData = new MainSupportingBlockData(null, false);
     public int totalFlyingPacketsSent;
     /**
@@ -1034,10 +1051,22 @@ public class PlayerData implements GrimUser {
     }
 
     public boolean mitigateDamage() {
+        return mitigateDamage(2000L);
+    }
+
+    /**
+     * Suppresses this player's outgoing damage for {@code millis} milliseconds.
+     *
+     * <p>The duration is a parameter because a check's confidence differs: a heuristic that is worth
+     * cancelling a hit over is not the same as one that should suppress everything for five seconds.
+     * The damage event multiplies by 0.05 rather than cancelling the attack, so the player still swings
+     * and still sees the hit land.
+     */
+    public boolean mitigateDamage(long millis) {
         if (!mitigateDamageEnabled) {
             return false;
         }
-        mitigateDamageTime = System.currentTimeMillis() + 2000;
+        mitigateDamageTime = System.currentTimeMillis() + millis;
         return true;
     }
 

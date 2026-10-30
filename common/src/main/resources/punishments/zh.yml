@@ -184,22 +184,43 @@ Punishments:
         remove-violations-after: 300
         checks:
             - "Aim"
+            - "Analysis"
+            - "!AnalysisC"
+            - "!AnalysisD"
+            - "!AnalysisE"
+            - "!AnalysisF"
+            - "!AnalysisK"
+            - "!AnalysisN"
         commands:
             - "1:1 [log]"
             - "3:3 [alert]"
             - "3:3 [webhook]"
             - "3:3 [proxy]"
             - "15:0 kick %player% cheating"
-    Analysis:
+    NoPenalty:
         remove-violations-after: 300
         checks:
-            - "Analysis"
+            - "AnalysisC"
+            - "AnalysisD"
+            - "AnalysisE"
+            - "AnalysisF"
+            - "AnalysisK"
+            - "AnalysisN"
         commands:
             - "1:1 [log]"
             - "5:5 [alert]"
             - "5:5 [webhook]"
             - "5:5 [proxy]"
-            - "25:0 kick %player% cheating"
+    Invalid:
+        remove-violations-after: 300
+        checks:
+            - "BadPacketsZ"
+        commands:
+            - "1:1 [log]"
+            - "1:1 [alert]"
+            - "1:1 [webhook]"
+            - "1:1 [proxy]"
+            - "1:0 kick %player% cheating"
     Autoclicker:
         remove-violations-after: 300
         checks:

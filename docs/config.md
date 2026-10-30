@@ -127,7 +127,7 @@ check-for-updates: true
 | `true`（默认） | 服务器启动时，在**控制台打印一次当前版本号** |
 | `false` | 不打印 |
 
-> ⚠️ **注意**：这个选项**并不会真的去检查有没有新版本**。名字和上游 Grim 一样，但在这个分支里，它只负责打印版本号。想知道有没有新版，请自己看 [Releases 页面](https://github.com/jiuxian1337/WatchNeko/releases)。
+> ⚠️ **这个选项不会检查有没有新版本**，它只在启动时打印一次当前版本号。想知道有没有新版，请自己看 [Releases 页面](https://github.com/jiuxian1337/WatchNeko/releases)。
 
 ---
 
@@ -183,7 +183,7 @@ client-brand:
 | LabyMod | `^labymod$` |
 | Feather | `^Feather Fabric$` |
 
-> ⚠️ **其他客户端（Badlion、Forge 等）的品牌字符串我没有在代码里找到依据**，别照抄网上的值。
+> ⚠️ **其他客户端（Badlion、Forge 等）的品牌字符串没有可靠来源**，别照抄网上的值。
 >
 > 想确认某个客户端的准确名字，有个简单办法：**让它进服，看聊天栏显示的 `%brand%` 是什么**（需要先清空 `ignored-clients`），把那串字原样填进来即可。
 
@@ -216,15 +216,15 @@ spectators:
 | 设置 | 默认 | 说明 |
 |---|---|---|
 | `hide-regardless` | `false` | `true` = 有 **`watchneko.spectate`** 权限的人**一进服就永远隐藏**，不管他在不在旁观 |
-| `allowed-worlds` | `- ""` | 见下方说明——**代码行为和文件里的注释是反的** |
+| `allowed-worlds` | `- ""` | 见下方说明——**注意下面的行为说明** |
 
-> ⚠️ **两点和文件里的注释对不上，以这里为准（下面都是从代码里读出来的）：**
+> ⚠️ **两点需要注意，以这里为准：**
 >
 > **1. `hide-regardless` 认的权限是 `watchneko.spectate`，不是 `watchneko.spectator`。**
-> 配置文件注释里写的是 `watchneko.spectator`，但代码里检查的是 `watchneko.spectate`。给错权限不会生效。
+> 给错权限不会生效。
 >
 > **2. `allowed-worlds` 的语义和注释相反。**
-> 文件里的注释写「观察者在这些世界**不会**隐藏」，但代码的逻辑是：**只有在这个列表里的世界才会隐藏**。
+> 文件里的注释写「观察者在这些世界**不会**隐藏」，但实际行为是：**只有在这个列表里的世界才会隐藏**。
 >
 > | 列表内容 | 实际效果 |
 > |---|---|
@@ -239,7 +239,7 @@ spectators:
         - "pvp_world"
 ```
 
-> 另外：旁观者之间**互相可见**（两个管理员同时旁观时能看到对方），这条也是代码里写死的。
+> 另外：旁观者之间**互相可见**（两个管理员同时旁观时能看到对方），这一点改不了。
 
 ---
 
@@ -285,22 +285,22 @@ ignore-duplicate-packet-rotation: false
 | `cancel-duplicate-packet` | `true` | 撤销重复的移动数据包。修复 1.8 服务器上 1.17–1.20.5 玩家的「桶不同步」问题（[MC-12363](https://bugs.mojang.com/browse/MC-12363)）。Mojang 已在 1.21 修复，所以这项只对旧版本生效 |
 | `ignore-duplicate-packet-rotation` | `false` | 处理重复数据包时，是否**忽略里面的转头数据** |
 
-`disable-pong-cancelling` 的说明（翻译自原文）：**开启它可以改善和其他反作弊的兼容性，但可能导致数据包限制器出问题。不确定的话不要开。**
+`disable-pong-cancelling` 的说明：**开启它可以改善和其他反作弊的兼容性，但可能导致数据包限制器出问题。不确定的话不要开。**
 
 ---
 
-## `mitigate-damage` — ⚠️ 当前版本无效
+## `mitigate-damage` — 检测命中后压低伤害
 
 ```yaml
 mitigate-damage:
     enabled: true
 ```
 
-> ⚠️ **这个设置在当前版本里不生效，改了没有任何区别。**
->
-> 代码里 `mitigateDamage()` 这个方法会在约 100 处被检测调用，但它只做一件事：把一个叫 `mitigateDamageTime` 的内部变量设成「当前时间 + 2000 毫秒」。**这个变量在全部代码里没有任何地方读取**——写了就没人用。
->
-> 所以无论 `enabled` 填 `true` 还是 `false`，玩家行为都不会有任何变化。这个功能应该是从上游继承下来后改造了一半，暂时保持默认即可。
+`enabled: false` 时，所有检测的减伤调用都会直接返回 false，玩家受到的影响为零。
+
+开启时，命中某些启发式瞄准检测的玩家会在一段时间内**打不出伤害**：攻击照常发出、动画照常播放，但伤害值乘以 0.05。时长由各检测自己决定（见 `AnalysisC` / `AnalysisD` / `AnalysisE` / `AnalysisF` / `AnalysisG` 的 `mitigate-damage-ms`），其余检测统一 2000 毫秒。
+
+> 这不会取消攻击包。玩家仍然能挥剑、能打出击退，只是这一次和接下来几秒内的伤害被压到 5%。这是刻意的：取消攻击包会让客户端和服务端状态不一致，而压低伤害只影响结果。
 
 ---
 
@@ -336,7 +336,7 @@ Simulation:
 - 优势累计到 `max-advantage` 就拉回
 - 玩家合法移动时，优势按 `setback-decay-multiplier` 慢慢衰减
 
-**默认配置下的衰减曲线**：50 秒后，玩家的容忍度从 4 格降到 1 格。作者提供了可视化图表：
+**默认配置下的衰减曲线**：50 秒后，玩家的容忍度从 4 格降到 1 格。可视化曲线：
 - [衰减曲线](https://www.desmos.com/calculator/4lovswdarj)
 - [违规累积曲线](https://www.desmos.com/calculator/d4ufgxrxer)
 
@@ -394,7 +394,7 @@ RotationPlace:
 
 `cancelvl` = 违规达到多少次后，**取消这个玩家的方块放置**。
 
-> 🚨 **注意 `0` 的含义和直觉相反。** 代码里的判断是 `cancelVL >= 0 && violations >= cancelVL`：
+> 🚨 **注意 `0` 的含义和直觉相反。**
 >
 > | 值 | 实际效果 |
 > |---|---|
@@ -419,7 +419,7 @@ ScaffoldA:
 
 > 🚨 **`cancel-for-ms` 的作用范围是全服，不是单个玩家。**
 >
-> 代码里控制「取消到什么时候」的变量是 `static`（全服共用一份）。只要有**任何一个人**触发了 Scaffold 的取消，接下来 `cancel-for-ms` 毫秒内，**服务器上所有玩家**低头放方块都会被取消（客户端方块会被重新同步）。
+> 这个「取消到什么时候」是**全服共用**的。只要有**任何一个人**触发了 Scaffold 的取消，接下来 `cancel-for-ms` 毫秒内，**服务器上所有玩家**低头放方块都会被取消（客户端方块会被重新同步）。
 >
 > 这可能导致的现象：某个玩家触发了搭桥检测，然后**全服玩家都感觉放方块「回弹」了一下**。
 >
@@ -457,17 +457,13 @@ NoSlowA:
 
 | 设置 | 说明 |
 |---|---|
-| `threshold` | 多少偏移算作弊。作者说 **0.03–0.2 之间的标志值和原版 NoSlow 一致** |
+| `threshold` | 多少偏移算作弊。**0.03–0.2 之间的值和原版 NoSlow 一致** |
 | `setbackvl` | 违规多少次拉回。`0` = 不拉回 |
 | `decay` | 玩家正常使用物品并被减速时，违规值衰减多少 |
 
 ### `VelocityA` / `VelocityB` — 击退
 
 检测「被打不后退」外挂（AntiKnockback）。
-
-> ✅ **从 `26.09.29.2` 起，这两段配置可以正常生效了。**
->
-> 在那之前，代码读取的键名是 `Knockback.*` 和 `Explosion.*`，和配置文件里的段名对不上，导致 `VelocityA:` / `VelocityB:` 两段**写了也没用**。这个 bug 已经修掉，现在代码读的就是这两个段。
 
 ```yaml
 VelocityA:
@@ -518,7 +514,7 @@ VehicleTimer:
 | `TimerA.drift` | 玩家卡顿时**可以攒下来的毫秒数**，供之后补偿 |
 | `TimerLimit.ping-abuse-limit-threshold` | 检查延迟时对 timer 余额的限制。**合法玩家延迟超过这个值可能被误拉回**，填 `-1` 关闭 |
 
-> ⚠️ **`drift` 不能设太高**。原文警告：设太高可能让 1.8 服务器的「快速使用 / 快速治疗 / 快速弓箭」绕过检测。**120 毫秒是比较好的平衡点。**
+> ⚠️ **`drift` 不能设太高**。设太高可能让 1.8 服务器的「快速使用 / 快速治疗 / 快速弓箭」绕过检测。**120 毫秒是比较好的平衡点。**
 
 ### `Reach` — 攻击距离
 
@@ -699,6 +695,109 @@ AnalysisA:
 
 ---
 
+## `AnalysisB` – `AnalysisO` — 启发式瞄准检测
+
+这一族看的是**旋转数据本身的形状**，不预测移动。它们按组件拆成独立检测，因此可以分别调参、分别惩罚。
+
+| 检查 | 抓什么 | 加 VL | 命中后减伤 |
+|---|---|---|---|
+| `AnalysisB` | 十次旋转窗口内的统计特征（随机化缺陷、同步、常量、快照） | 是 | — |
+| `AnalysisC` | `AnalysisB` 的 component 分数累积 | **否** | 3500 ms |
+| `AnalysisD` | `AnalysisB` 的 interpolation 分数累积 | **否** | 2500 ms |
+| `AnalysisE` | 连续旋转增量共享同一个公约数 | **否** | 4000 ms |
+| `AnalysisF` | 六十个样本里离群值与重复值都过少 | **否** | 4000 ms |
+| `AnalysisG` | 一百个样本里出现重复的增量序列 | 是 | 5000 ms |
+| `AnalysisH` | 一次大幅旋转夹在两次小幅旋转之间 | 是 | — |
+| `AnalysisI` | 增量向量角度连续三次完全相同 | 是 | — |
+| `AnalysisJ` | 二十五次旋转窗口的统计量（IQR、z 值、机器人模式、不可能值） | 是 | — |
+| `AnalysisK` | `AnalysisJ` 的 IQR 累积 | 是 | — |
+| `AnalysisL` | `AnalysisJ` 的 z 值累积 | 是 | 5500 ms |
+| `AnalysisM` | 熵稳定性、不同值过少、尖峰模型、随机化缺陷 | 是 | — |
+| `AnalysisN` | `AnalysisM` 的熵稳定性累积 | **否** | 5000 ms |
+| `AnalysisO` | `AnalysisM` 的不同值过少累积 | 是 | 3000 ms |
+
+**减伤只出现在 C/D/E/F/G/L/N/O 上**。`AnalysisB` 的随机化缺陷、`AnalysisH`、`AnalysisI`、`AnalysisJ`、`AnalysisM` 只加 VL、不压低伤害。
+
+`AnalysisC` / `AnalysisD` / `AnalysisK` / `AnalysisL` / `AnalysisN` / `AnalysisO` 没有自己的采样窗口：对应的父检查算出分数超过上限后调用它们。它们在 `punishments.yml` 里各自成组，见下。
+
+```yaml
+AnalysisB:
+    randomizer-flaw-add-vl: 25
+    component-vl-limit: 400
+    component-vl-fade: 5
+    interpolation-vl-limit: 400
+    interpolation-vl-fade: 5
+AnalysisC:
+    mitigate-damage-ms: 3500
+AnalysisD:
+    mitigate-damage-ms: 2500
+AnalysisE:
+    constant1-need-vl: 8
+    constant2-need-vl: 6
+    constant3-need-vl: 6
+    mitigate-damage-ms: 4000
+AnalysisF:
+    buffer: 2
+    mitigate-damage-ms: 4000
+AnalysisG:
+    buffer: 2.5
+    buffer-fade: 0.3
+    mitigate-damage-ms: 5000
+AnalysisH:
+    buffer: 3.0
+    ticks-to-reset: 2500
+AnalysisJ:
+    iqr-vl-limit: 11.0
+    zfactor-vl-limit: 7.0
+    improbable-vl-limit: 15.0
+AnalysisK:
+    mitigate-damage-ms: 0
+AnalysisL:
+    mitigate-damage-ms: 5500
+AnalysisM:
+    entropy-vl-limit: 30
+    distinct-vl-limit: 4.0
+    randomizer-vl-limit: 2.5
+AnalysisN:
+    mitigate-damage-ms: 5000
+AnalysisO:
+    mitigate-damage-ms: 3000
+```
+
+**调参方向**：调高 `need-vl` / `buffer` / `*-vl-limit` 更安静；调高 `randomizer-flaw-add-vl` 或调低上限更敏感。`mitigate-damage-ms` 设为 `0` 表示这个检测只提醒、不压伤害。
+
+### 它们与惩罚组的关系
+
+- `AnalysisB`、`AnalysisG`、`AnalysisH`、`AnalysisI`、`AnalysisJ`、`AnalysisL`、`AnalysisM`、`AnalysisO` 进默认的 `Analysis` 组，与其他 Analysis 检测共用阈值。
+- `AnalysisC`、`AnalysisD`、`AnalysisE`、`AnalysisF`、`AnalysisK`、`AnalysisN` 被 `!` 从 `Analysis` 组剔除，放进 `NoPenalty` 组：只记录、只提醒，永不踢人。
+
+> ⚠️ `punishments.yml` 的 `checks` 列表**按顺序处理**：`- "!AnalysisC"` 必须写在 `- "Analysis"` 之后，否则排除不生效，这些检测会重新开始累计违规。
+
+---
+
+## `BadPacketsZ` — 不可能的俯仰角
+
+`BadPacketsZ` 判断客户端上报了正常客户端不会产生的 pitch 值。
+
+默认配置把它从 `BadPackets` 组剔除，单独放进 `Invalid` 组：**一次就踢**。
+
+```yaml
+Invalid:
+    remove-violations-after: 300
+    checks:
+        - "BadPacketsZ"
+    commands:
+        - "1:1 [log]"
+        - "1:1 [alert]"
+        - "1:1 [webhook]"
+        - "1:1 [proxy]"
+        - "1:0 kick %player% cheating"
+```
+
+以后发现其他**几乎不会误判**的检测，也可以直接加进这个组的 `checks`。
+
+---
+
 ## 实验性检查
 
 ```yaml
@@ -827,7 +926,7 @@ history:
 
 用 SQLite 时，数据存在 `plugins/WatchNeko/violations.sqlite`。
 
-> ⚠️ **记录只增不减。** 代码里**没有任何自动清理逻辑**——`remove-violations-after` 只负责重置「违规次数」，**不会删除历史数据库里的记录**。跑得久了这个文件会一直变大，需要你自己定期处理（删文件或写 SQL 清理）。
+> ⚠️ **记录只增不减。** 插件**不会自动清理历史记录**——`remove-violations-after` 只负责重置「违规次数」，**不会删除历史数据库里的记录**。跑得久了这个文件会一直变大，需要你自己定期处理（删文件或写 SQL 清理）。
 >
 > 想控制体积，可以把 `enabled` 设成 `false` 彻底关掉记录功能。
 
@@ -845,7 +944,7 @@ history:
 
 > 📌 数据库（例子里的 `grim`）需要**你自己先在 MySQL 里建好**——插件不会替你创建库。
 
-> ⚠️ **改数据库类型必须重启服务器**，`/watchneko reload` 不生效。原文明确写了「仅在重启服务器后生效」。
+> ⚠️ **改数据库类型必须重启服务器**，`/watchneko reload` 不生效。
 
 ---
 

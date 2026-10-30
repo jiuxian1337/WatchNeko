@@ -28,6 +28,7 @@ JAVA_HOME="/c/Program Files/Zulu/zulu-21" ./gradlew build
 仓库没有 CI（`.github/` 只有 issue 模板），构建与测试都在本地跑。每次构建都会向 gradle.com 上传 Develocity build scan（`settings.gradle.kts` 里硬编码了同意条款），离线或不想上传时加 `--no-scan`。
 
 - 子模块的 `build` 依赖 `spotlessApply`（4 空格、去未用 import、去行尾空格），构建会顺手改写源码格式。只格式化：`./gradlew spotlessApply`。
+- 构建过一次之后，`common/build/generated/sources/delombok/` 里会有全部 Lombok 类的展开副本（约 580 个 `.java`，反映上一次构建）。按类名 grep 会先命中这里，读到的行号与源码对不上；搜索时排除 `build/`。
 - 可分发产物：`bukkit/build/libs/WatchNeko-bukkit-<yy.MM.dd>.jar`（`:common` 被 shade 进去）。版本号是构建日期 `yy.MM.dd`，不是语义化版本。
 - 测试只在 `common` 模块（`bukkit` 没有测试目录，JUnit 5）：
   - 全量：`./gradlew :common:test`
@@ -54,7 +55,7 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python run.py          # 首次启动生成 config.yaml 并打印管理员密码
 ```
 
-`cloud-service/config.yaml` 与 `*.db` 被 gitignore（前者含明文密码与管理员密钥），不要提交。部署用 `cloud-service/deploy.sh`：它先跑测试，不过就不上传一个字节。
+`cloud-service/config.yaml` 与 `*.db` 被 gitignore（前者含明文密码与管理员密钥），不要提交。部署用 `cloud-service/deploy.sh`：它先跑测试，不过就不上传一个字节。仓库根目录另有 `docker-compose.yml`（`./cloud-service` 构建，配置与数据库挂在 `watchneko-data` 卷的 `/data`），适合快速起一个实例而不是正式部署。
 
 ## 架构
 
@@ -66,7 +67,7 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 - `start`（`StartableInitable`）：按固定顺序注册 packet 监听器、tick、命令、alert / discord / spectate / 违规数据库
 - `stop`（`StoppableInitable`）
 
-`common/platform/api` 的 `PlatformLoader` 抽象 Bukkit 与 Folia 的差异（scheduler、player、world、sender、command）；`WatchNekoAPI.detectPlatform()` 通过反射探测 Folia。新增平台 = 实现 `PlatformLoader`，不要把 Bukkit 类型塞进 `common`。
+`common/platform/api` 的 `PlatformLoader` 抽象 Bukkit 与 Folia 的差异（scheduler、player、sender、command、plugin / server 访问）；`WatchNekoAPI.detectPlatform()` 通过反射探测 `io.papermc.paper.threadedregions.RegionizedServer`，也可用 `-Dwatchneko.platform-override=FOLIA|BUKKIT` 强制指定。新增平台 = 实现 `PlatformLoader`，不要把 Bukkit 类型塞进 `common`——但 `PlayerData`、`utils/math/Location`、`utils/ray/RayUtils`、`AimProcessor` 里已有历史 Bukkit 引用，新增代码不要照抄这个形状。
 
 ### 数据包 → 检测
 
@@ -81,21 +82,59 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 | `BlockPlaceCheck` / `BlockBreakCheck` | 放置 / 破坏 | 交互类 |
 | `VehicleCheck` | `process(VehiclePositionUpdate)` | 载具 |
 
-注册顺序在 `packetChecks` 里是**语义**，不是风格：`ExploitC` 必须排在最前（注释：`必须前置这个检查`——它要在被撤销的移动进入模拟队列之前拦下），`SetbackBlocker` 必须排在最后（否则拦截期间无法继续检测）。`noneModules` 放没有监听的 check——它们由别的 check 直接调用，例如 `Hitboxes` 由 `Reach` 调 `getCheck(Hitboxes.class)`。
+注册顺序在 `packetChecks` 里是**语义**，不是风格：`ExploitC` 排在很靠前（源码注释：`必须前置这个检查`），`SetbackBlocker` 必须排在最后（否则拦截期间无法继续检测）。`ImmutableClassToInstanceMap` 保留插入顺序，监听器按 `values()` 顺序收到回调。`noneModules` 放没有监听的 check——它们由别的 check 直接调用，例如 `Hitboxes` 由 `Reach` 调 `getCheck(Hitboxes.class)`。
+
+`RotationCheck.onNoRotation()`（默认空实现）是第二个回调：`process` 只在包真的带了 yaw/pitch 变化时才被调用，需要区分「这一 tick 没转」的检测覆写它，由 `CheckManagerListener` 在 `hasPosition && !hasLook && 位置真的变了` 时通过 `CheckManager.onNoRotationUpdate()` 派发。它**不**进 `RotationSequence`（否则攻击锚点会漂移）。
 
 `PlayerData` 是每个玩家的状态中枢，持有 `CheckManager`、`ActionManager`、`PunishmentManager`、预测引擎、延迟补偿与 `RotationSequence`。类顶部注释是硬约束：**这些字段都在 anticheat 线程上，netty 线程的字段放 `PacketStateData`**。
 
-移动模拟在 `predictionengine/`：`MovementCheckRunner` 复刻原版移动，`PredictionRunner`（PositionCheck）是入口，`Simulation` 惩罚组是它的输出。setback 走 `SetbackTeleportUtil`。
+移动模拟在 `predictionengine/`：`MovementCheckRunner` 复刻原版移动，`checks/impl/movement/PredictionRunner`（PositionCheck）是入口；结果由 `checks/impl/prediction/OffsetHandler` 消费，它的 `@CheckData(name = "Simulation")` 才是 `punishments.yml` 里 `Simulation` 组的来源——**仓库里没有叫 `Simulation` 的类**，按这个名字 grep 源码是找不到的。setback 走 `SetbackTeleportUtil`。
 
 ### 检测类与"启用"
 
-每个检测是 `Check` 的子类，用 `@CheckData(name, configName, decay, setback, experimental)` 标注，并在 `CheckManager` 构造器里**手工登记**进对应 map——新增检测必须同时改这里，否则不会被调用。同一个类在同一张 map 里**只能登记一次**：`ImmutableClassToInstanceMap.Builder` 遇到重复 key 会在 `new PlayerData` 时抛 `IllegalArgumentException: Multiple entries with same key`，不会静默覆盖。
+每个检测是 `Check` 的子类，用 `@CheckData(name, configName, decay, setback, experimental)` 标注，并在 `CheckManager` 构造器里**手工登记**进对应 map——新增检测必须同时改这里，否则不会被调用。同一个类**只能登记一次**，跨 map 也不行：各 map 最后会 `putAll` 合并成 `allChecks`，`ImmutableClassToInstanceMap.Builder` 遇到重复 key 会在 `new PlayerData` 时抛 `IllegalArgumentException: Multiple entries with same key`，不会静默覆盖。
 
-启用不是布尔开关：`PunishmentManager.reload()` 先把所有 check 置为 disabled，再遍历 `punishments.yml` 的 `Punishments` 组，按 check 名 / 别名做**子串匹配**，命中的才启用。所以没写进任何惩罚组的 check 永远不会 flag（`Check.flag()` 会因 `handleViolation` 返回 false 而退出）。`AnalysisA` 靠 `Analysis` 组的前缀匹配继承惩罚规则。子串匹配意味着组名写短会误伤同类 check（`"Aim"` 命中所有名字含 `Aim` 的检测），改名或新增同前缀检测时要回头核对。
+启用不是布尔开关：`PunishmentManager.reload()` 先把所有 check 置为 disabled，再遍历 `punishments.yml` 的 `Punishments` 组，按 check 名 / 别名做**子串匹配**，命中的才启用。所以没写进任何惩罚组的 check 永远不会 flag（`Check.flag()` 会因 `handleViolation` 返回 false 而退出）。`AnalysisA` 靠 `Analysis` 组匹配到（组名是它的前缀，但机制仍是子串匹配）。子串匹配意味着组名写短会误伤同类 check（`"Aim"` 命中所有名字含 `Aim` 的检测），改名或新增同前缀检测时要回头核对。
+
+**`!name` 排除项必须写在匹配它的那条之后**：同一段内 `checks` 是按顺序处理的，`excluded` 列表只对**已经加进 `checksList`** 的 check 生效。`- "Analysis"` 后面跟 `- "!AnalysisC"` 才会剔除；顺序反过来则排除无效、被排除的检测照常累计 VL。`AnalysisHeuristicWiringTest.exclusionsComeAfterThePatternThatMatchedThem` 会检查这一点。
 
 flag 链路：`Check.flag()` → `FlagEvent`（可取消）→ `PunishmentManager.handleViolation` 记录 VL → `handleAlert` 在阈值处执行组内命令：`[alert]` / `[log]`（违规库）/ `[webhook]`（Discord）/ `[proxy]`（跨服）/ 控制台命令。
 
 `@CheckData(experimental = true)` 是第二道闸：`experimental-checks` 默认 `false`，此时这些 check 的 `flag()` 直接返回 false，连 FlagEvent 都不会发。新增检测默认标了 experimental 就等于默认不生效。
+
+### 瞄准检测的拆分模式
+
+`AnalysisB`–`AnalysisO` 是同一族检测，从上游移植后按组件拆开。**读懂这族只需要理解一个模式**：父检查持有采样窗口，子检查只负责惩罚。
+
+- `AnalysisB`（basic）、`AnalysisJ`（statistics）、`AnalysisM`（complex）各自维护窗口和分数；分数越过上限时调 `getCheck(AnalysisC.class)` 之类的子检查 `flagAndAlert(...)`。
+- `AnalysisC`/`D`/`K`/`L`/`N`/`O` 是纯惩罚类：没有监听、登记在 `noneModules`、只有一个 `public long mitigateDamageMs`（从各自配置段读）。它们与 `Hitboxes` 被 `Reach` 调用是同一形状。
+- 这个拆分的唯一目的是**让每个路径有自己的惩罚组**：上游有些路径不加 VL，所以 `AnalysisC/D/E/F/K/N` 被 `!` 从 `Analysis` 组剔除并放进 `NoPenalty`（只提醒、永不踢人），其余留在 `Analysis`。删掉这个拆分，这些路径就会跟着父检查一起累计 VL。
+- 减伤只在**上游会阻断攻击**的路径上存在（C/D/E/F/G/L/N/O）；`AnalysisB` 的随机化缺陷、`H`/`I`/`J`/`M` 只加 VL、不调 `mitigateDamage`。
+
+**采样门控集中在 `analysis/aim/AimHeuristicGate`**，不要在子检查里重写：
+
+| 方法 | 作用 |
+|---|---|
+| `blocks(player)` | 传送 / 载具 / 马 / 1.17 重复包 / `ignoreNextRotation` 一次性跳过 / 传送后 500ms 宽限。`AnalysisB`/`E`/`F`/`G`/`H`/`I` 与 `BadPacketsZ` 用它 |
+| `blocksNoRotation(player)` | 只看传送后 1000ms 宽限（无旋转 tick 本身无可信与否）。`AnalysisH` 用 |
+| `dropRotation(player, update)` | `blocks` + NaN/Infinity/\|v\|>3E8 守卫。`AnalysisJ`/`AnalysisM` 用它 |
+| `noPitchChange(update)` | 纯水平旋转当作「无旋转」。**上游是复制粘贴 bug（pitch 比较两次），刻意保留** |
+| `referenceDelta(update)` | 返回取反的 delta。上游构造事件时把 `to`/`from` 传反，所以它的 delta 是 `from - to`；随机化缺陷、Pattern、Smooth 依赖这个符号 |
+
+攻击门是**按检查分别加的**，不在 gate 里：只有 `AnalysisJ`/`AnalysisM` 要求 `hasAttackedSince(3500L)`，其余启发式不看攻击。`AnalysisA` 走的是另一条路（`RotationSequence` + `AttackSignalListener`，见「云端检测」）。
+
+**改动这些检测前先读 `AimHeuristicGate` 的类注释**：里面每一条「看起来像 bug」的行为都是与上游对齐的结果，修正任何一条都会改变触发人群，通常表现为误判变多。`AnalysisHeuristicWiringTest` 钉住了其中几条（命名匹配、`!` 排除顺序、`noPitchChange`、`referenceDelta`）。
+
+### 另一族瞄准检测（`checks/impl/aim/`）
+
+`aim/` 是换皮前就存在的旧检测族，与 `analysis/` 并存，**不要按 `analysis/` 的模式去理解它**：
+
+- `AimA`–`AimW`（共 17 个）各自独立实现，没有父子拆分，也没有共用的采样门控；很多用 `AimTargetTraceUtil`（在 `utils/aim/`）算目标框方向。
+- `aim/processor/AimProcessor` 不是检测，是**旋转量预处理器**：它在 `process()` 里 `rotationUpdate.setProcessor(this)`，算出 `deltaYaw`/`deltaPitch`/`optimalYaw`/`sensitivityX` 等供别的检查读取。`PlayerData.getHorizontalSensitivity()` 也走它。
+- `aim/processor/Cinematic` 只负责在 `RotationUpdate` 上写 `isCinematic`/`isCinematic2`，不 flag。
+- `AimV` 是 `PacketCheck`（不是 `RotationCheck`），把旋转流喂给 `analysis/aim/trajectory/` 的 5 个 `AimDetectionStrategy`（`AccelerationDetection`、`AimPathAnalysis`、`CorrelationAnalysis`、`CoordinationDetection`、`FrictionDetection`）；策略通过 `DetectionContext.flagDetection()` 回调 `getCheck(AimV.class).flagAndAlert(...)`。这是另一处「父检查持窗口、子策略只报」的形状，但实现在 `PacketCheck` 上。
+
+**`rotationChecks` 的插入顺序同样是语义**：`AimProcessor` 必须在最前（后面的检查在 `process` 里读它写好的 `update.getProcessor()`），`Cinematic` 必须在 `AimB`/`AimD` 之前（后者读它写的 `isCinematic2`）。但注意 `Cinematic` 现在**恒定写 `false`**（原先的 `function.allowed-cinematic` 配置项已删），所以 `isCinematic()`/`isCinematic2()` 实际上永远是 `false`——`AimB`/`AimD`/`AimG`/`AimK` 里读它们的分支不会命中，这不是 bug，是配置项移除后的遗留。
 
 ### 配置
 
@@ -103,7 +142,7 @@ flag 链路：`Check.flag()` → `FlagEvent`（可取消）→ `PunishmentManage
 
 **配置补齐**：`ConfigCompleter` 在 `saveAllDefaults(false)` 之后、`loadAll` 之前运行，把 `en/zh` 资源里有、用户文件里没有的键（连同注释）插入 `config.yml` / `messages.yml` / `discord.yml`，插入前备份为 `*.yml.bak`。它只做插入：已有行不重写、不排序、不删除，第二次运行是 no-op。`punishments.yml` 刻意排除（用户自定义数据）。
 
-`config.yml` 末尾的 `config-version` 是**纯标记**：每次运行都从资源文件取值并强制写入（就地改写旧值、缺失则追加），**不用它决定补哪些键**——补齐永远看实际缺了什么。资源文件里没有标记时不写（`currentVersion` 返回 -1，不是 0）：没有版本可盖就不该在每台服务器上凭空写一个。新增配置键时把它加进 en/zh 资源即可，不需要写迁移分支。曾经的 `upgrade()` 迁移体系从未被调用，已于 2026-10-28 删除，不要恢复。
+`config.yml` 末尾的 `config-version` 是**纯标记**：每次运行都从资源文件取值并强制写入（就地改写旧值、缺失则追加），**不用它决定补哪些键**——补齐永远看实际缺了什么。资源文件里没有标记时不写（`currentVersion` 返回 -1，不是 0）：没有版本可盖就不该在每台服务器上凭空写一个。新增配置键时把它加进 en/zh 资源即可，不需要写迁移分支。它的取值约定是**上一个 release 的 config-version + 1**（见 `e63a8de`），不是开发过程中随手递增——数字要能对应到某个已发布版本。曾经的 `upgrade()` 迁移体系从未被调用，已于 2026-10-28 删除，不要恢复。
 
 写入前会用 SnakeYAML 解析一遍合并结果，解析失败就放弃写入并报错；写入走临时文件 + `ATOMIC_MOVE`。改动补齐逻辑时必须跑 `ConfigCompleterTest` 与 `ConfigCompleterShippedFilesTest`（后者用真实资源文件验证）。
 
@@ -125,7 +164,9 @@ flag 链路：`Check.flag()` → `FlagEvent`（可取消）→ `PunishmentManage
 
 ### 云端服务
 
-`app/` 分层：`main.py`（契约端点，只接受依赖注入）、`console.py` + `templates/`（服务端会话守卫；每个视图一个文档，非 SPA）、`admin_api.py` + `admin_auth.py`（控制台 API 与管理员会话，与租户密钥是两套身份）、`static/`（每个视图一个 `page-*.js` + 共享的 `console.js`）、`schemas.py`（pydantic `extra="forbid"`）、`auth.py`（401 / 403 分开）、`tenants.py`（密钥只存 SHA-256）、`quota.py`、`store.py`（SQLite）、`dataset.py` / `train.py` / `publish.py` / `ops.py` / `scheduler.py`（训练 → 发布 → 回滚，健康判据是唯一刹车）、`metrics.py`。`serve.py` 是组合根。
+`app/` 分层：`main.py`（契约端点，只接受依赖注入）、`console.py` + `templates/`（服务端会话守卫；每个视图一个文档，非 SPA）、`admin_api.py` + `admin_auth.py`（控制台 API 与管理员会话，与租户密钥是两套身份）、`static/`（每个视图一个 `page-*.js` + 共享的 `console.js`）、`schemas.py`（pydantic `extra="forbid"`）、`auth.py`（401 / 403 分开）、`tenants.py`（密钥只存 SHA-256）、`quota.py`、`store.py`（SQLite）、`dataset.py` / `train.py` / `publish.py` / `ops.py` / `scheduler.py`（训练 → 发布 → 回滚，健康判据是唯一刹车）、`model.py`（`ModelRegistry` 持有「当前生效的模型 + 与它绑定的 scorer」，`classify()` 用模型自带的阈值把分数变成裁决）、`metrics.py`。`serve.py` 是组合根，也是唯一决定每个接缝用哪个实现的模块。
+
+`model.py` 的 `StubScorer` 恒返回 0.0，只用于契约测试固定裁决的**形状**，不代表任何检测能力；`ModelRegistry` 冷启动时 `current()` 为 `None`，正是插件侧 `canInfer() == false` 对应的服务端状态。训练后端在 `config.yaml` 的 `training.trainer` 选（默认 `logistic`，无原生依赖；`lightgbm` 需要 OpenMP），`serve.build_service()` 在请求的后端不可用时回退并打日志，不会静默。
 
 新增一个控制台页面要同时改三处：`templates/<page>.html`、`static/page-<page>.js`、`console.py` 的 `NAV` 与 `PAGES`。`tests/test_console_pages.py` 会枚举页面列表，漏改会红。
 
@@ -140,5 +181,7 @@ flag 链路：`Check.flag()` → `FlagEvent`（可取消）→ `PunishmentManage
 - `checks/impl` 只放检测实现、检测入口与子检测（见该包 `package-info.java`）；工具类进 `utils`，特征提取与投票策略进 `analysis`，与云端通信进 `cloud`。
 - 测试要能在没有 PacketEvents 的情况下驱动检测：用 `RotationSequence` / `AttackAnchor` 这类框架无关的接缝，不要构造 `PacketEvent`。云端侧同理——`CloudTransport` 是接口，测试用 `FixtureTransport` 回放 `contract/fixtures` 里的响应，不要起 HTTP。
 - 面向用户的文档是中文（`docs/`、`README.md`）；Java 代码与注释以英文为主（个别历史注释是中文）；提交信息以中文为主。
+- **面向用户的文本只讲用户能做什么**：`docs/`、`README.md`、`common/src/main/resources/*/*.yml` 的注释会原样出现在用户服务器上。不要写类名 / 方法名 / 包路径、不要写「参考实现」「上游」「移植」这类来源说明、不要写修改历史与版本对比、不要解释代码为什么这么写。配置注释只回答「这个参数影响什么」。实现细节和对齐说明写进代码注释，不要进配置。
+- 许可证：`LICENSE` 是完整的 GPLv3，`README.md` 与两个 `config*.yml` 头部都标明基于 Grim 修改。不要往这些地方加超出 GPLv3 的附加限制（历史上配置头部曾有一句「修改版必须私有」，与 GPLv3 冲突，已删除）。
 - 与 Grim / EdGrim 不能共存：检测到就关服（`WatchNekoBukkitLoaderPlugin.onLoad`）。
 - Issue 与 triage 流程见 `AGENTS.md` 与 `docs/agents/`（GitHub issues，`gh` CLI；标签 `needs-triage` / `needs-info` / `ready-for-agent` / `ready-for-human` / `wontfix`）。

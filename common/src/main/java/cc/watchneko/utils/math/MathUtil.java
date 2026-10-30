@@ -32,7 +32,7 @@ public final class MathUtil {
         return nums.isEmpty() ? 0 : getSumDouble(nums) / nums.size();
     }
 
-    public static double getSumDouble(final Collection<Double> nums) {
+    private static double getSumDouble(final Collection<Double> nums) {
         double sum = 0D;
         for (double v : nums) sum += v;
         return sum;
@@ -48,13 +48,16 @@ public final class MathUtil {
     }
 
     public static double getVariance(final Collection<? extends Number> data) {
+        if (data.isEmpty()) {
+            return 0.0;
+        }
         double mean = getAverage(data);
         double var = 0.0;
         for (Number n : data) {
             double diff = n.doubleValue() - mean;
             var += diff * diff;
         }
-        return var;
+        return var / data.size();
     }
 
     public static double getVariance(List<Double> data) {
@@ -65,24 +68,6 @@ public final class MathUtil {
             var += Math.pow(v - mean, 2);
         }
         return var / data.size();
-    }
-
-    public static double getVariance(List<Double> data, boolean sample) {
-        if (data.size() < 2) return 0.0;
-        double mean = getAverage(data);
-        double var = 0.0;
-        for (double v : data) var += Math.pow(v - mean, 2);
-        return var / (data.size() - (sample ? 1 : 0));
-    }
-
-    public static double getKurtosis(List<Double> data, boolean sample) {
-        if (data.size() < 4) return 0.0;
-        double variance = getVariance(data, sample);
-        if (variance == 0) return 0.0;
-        double mean = getAverage(data);
-        double m4 = 0.0;
-        for (double v : data) m4 += Math.pow(v - mean, 4);
-        return (m4 / data.size()) / Math.pow(variance, 2) - 3;
     }
 
     public static double getKurtosis(final Collection<? extends Number> data) {
@@ -104,25 +89,6 @@ public final class MathUtil {
             diffs.add(data.get(i + 1) - data.get(i));
         }
         return diffs;
-    }
-
-    public static double calculatePeriodicity(List<Double> data) {
-        if (data.size() < 10) return 0.0;
-        double sumSq = 0;
-        for (double v : data) sumSq += v * v;
-        double main = data.get(0) * data.get(0) + data.get(1) * data.get(1);
-        return main / (sumSq + 1e-6);
-    }
-
-    public static double calculateAutocorrelation(List<Double> data, int lag) {
-        if (data.size() < lag * 2) return 0;
-        double mean = getAverage(data);
-        double num = 0, den = 0;
-        for (int i = lag; i < data.size(); i++) {
-            num += (data.get(i) - mean) * (data.get(i - lag) - mean);
-            den += Math.pow(data.get(i) - mean, 2);
-        }
-        return num / (den + 1e-6);
     }
 
     public static double stdDev(Collection values) {
@@ -177,30 +143,6 @@ public final class MathUtil {
     public static double getMedian(final List<Double> data) {
         int size = data.size();
         return (size % 2 == 0) ? (data.get(size / 2) + data.get(size / 2 - 1)) / 2.0 : data.get(size / 2);
-    }
-
-    public static List<Double> insertSort(List<Double> data) {
-        List<Double> arr = new ArrayList<>(data);
-        for (int i = 1; i < arr.size(); i++) {
-            double key = arr.get(i);
-            int j = i - 1;
-            while (j >= 0 && arr.get(j) > key) {
-                arr.set(j + 1, arr.get(j));
-                j--;
-            }
-            arr.set(j + 1, key);
-        }
-        return arr;
-    }
-
-    public static double computeJerkThreshold(List<Double> jerkHistory) {
-        if (jerkHistory.isEmpty()) return 8.0;
-        for (double v : jerkHistory) if (Math.abs(v) > 100) return 100.0;
-        double median = getMedian(insertSort(jerkHistory));
-        double sum = 0;
-        for (double v : jerkHistory) sum += Math.abs(v - median);
-        double mad = sum / jerkHistory.size();
-        return Math.max(median + 6 * mad, 10.0);
     }
 
     public static double roundToPlace(double value, int places) {
@@ -289,16 +231,6 @@ public final class MathUtil {
             }
         }
         return entropy;
-    }
-
-    public static double calculatePatternConsistency(List<Float> data) {
-        int sameSignCount = 0;
-        for (int i = 1; i < data.size(); i++) {
-            if (Math.signum(data.get(i)) == Math.signum(data.get(i - 1))) {
-                sameSignCount++;
-            }
-        }
-        return (double) sameSignCount / (data.size() - 1);
     }
 
     public static float getGCDValueStatistic(double s) {
@@ -482,99 +414,6 @@ public final class MathUtil {
             return 0.0;
         }
         return covariance / Math.sqrt(varianceX * varianceY);
-    }
-
-    public static double exponentialWeightedMean(final Collection<? extends Number> values) {
-        if (values.isEmpty()) {
-            return 0.0;
-        }
-        double mean = 0.0;
-        boolean first = true;
-        for (Number value : values) {
-            if (first) {
-                mean = value.doubleValue();
-                first = false;
-            } else {
-                mean = 0.15 * value.doubleValue() + 0.85 * mean;
-            }
-        }
-        return mean;
-    }
-
-    public static double getFractionalPart(final double value) {
-        return value - Math.floor(value);
-    }
-
-    public static double sigmoid(final double value) {
-        return 1.0 / (1.0 + Math.exp(-value));
-    }
-
-    public static Tuple<List<Double>, List<Double>> getAnalyzeOutliers(final Collection<? extends Number> collection) {
-        return getOutliers(collection);
-    }
-
-    public static double getKireikoGeneric(final Collection<? extends Number> collection) {
-        if (collection.isEmpty()) {
-            return 0.0;
-        }
-        double max = Math.abs(getMax(collection));
-        double min = Math.abs(getMin(collection));
-        double variance = getVariance(collection);
-        return max + min + variance;
-    }
-
-    public static double getMicroChangeEntropy(final Collection<? extends Number> data) {
-        if (data.isEmpty()) {
-            return 0.0;
-        }
-        List<Double> deltas = new ArrayList<>();
-        Double previous = null;
-        for (Number value : data) {
-            double current = value.doubleValue();
-            if (previous != null) {
-                deltas.add(Math.abs(current - previous));
-            }
-            previous = current;
-        }
-        if (deltas.isEmpty()) {
-            return 0.0;
-        }
-        Map<String, Integer> freq = new HashMap<>();
-        for (double delta : deltas) {
-            freq.merge(String.format("%.2f", delta), 1, Integer::sum);
-        }
-        double entropy = 0.0;
-        for (int count : freq.values()) {
-            double probability = (double) count / deltas.size();
-            entropy -= probability * (Math.log(probability) / Math.log(2));
-        }
-        return entropy;
-    }
-
-    public static double getStabilityIndex(final Collection<? extends Number> data) {
-        if (data.size() < 2) {
-            return 1.0;
-        }
-        double mean = mean(data);
-        if (mean == 0.0) {
-            return 0.0;
-        }
-        return 1.0 / (1.0 + (stdDev(data, mean) / Math.abs(mean)));
-    }
-
-    public static double getRollingStdDev(final List<? extends Number> data, final int windowSize) {
-        if (data.size() < windowSize || windowSize <= 1) {
-            return 0.0;
-        }
-        List<Double> stds = new ArrayList<>();
-        for (int i = 0; i <= data.size() - windowSize; i++) {
-            List<Double> window = new ArrayList<>(windowSize);
-            for (int j = 0; j < windowSize; j++) {
-                window.add(data.get(i + j).doubleValue());
-            }
-            stds.add(stdDev(window));
-        }
-        return mean(stds);
     }
 
     public static double entropy(final Collection<? extends Number> data) {

@@ -1,4 +1,4 @@
-package cc.watchneko.analysis.aim;
+package cc.watchneko.utils.aim;
 
 import cc.watchneko.player.PlayerData;
 import cc.watchneko.utils.collisions.datatypes.SimpleCollisionBox;

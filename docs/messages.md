@@ -109,7 +109,7 @@ prefix: "&8[&6我的服务器&8]"
 # » 表示 » (相当于缩小版的 >>), ANSI和UTF-8的显示方式有所不同,有时你甚至可以看到乱码.
 ```
 
-这是上游留下来的说明，讲的是 `»` 这个符号（两个小箭头）在某些控制台编码下会显示成乱码。**它和你的配置没有关系**，不用管。
+这是讲 `»` 这个符号（两个小箭头）在某些控制台编码下会显示成乱码的说明。**它和你的配置没有关系**，不用管。
 
 ---
 
@@ -307,7 +307,7 @@ upload-log-upload-failure: "%prefix% &c上载此日志时出错, 有关详细信
 
 用在 `/watchneko log <编号>` 和 `/watchneko dump` 上。`%url%` 会变成上传后的网址。
 
-> **上传到哪里？** 默认上传到 `https://paste.grim.ac/`（上游 Grim 提供的粘贴服务）。如果你自己的服务器有粘贴服务，可以用启动参数改：`-Dwatchneko.paste-url=你的地址`。
+> **上传到哪里？** 默认上传到 `https://paste.grim.ac/`。如果你有自己的粘贴服务，可以用启动参数改：`-Dwatchneko.paste-url=你的地址`。
 
 ### 权限/环境错误
 
@@ -353,7 +353,7 @@ disconnect:
     timeout: "&c你太久没响应服务器了，请检查网络后重连"
 ```
 
-`blacklisted-forge` 这条默认是英文的（上游遗留），想改成中文：
+`blacklisted-forge` 这条默认是英文的，想改成中文：
 
 ```yaml
     blacklisted-forge: "<red>你的 Forge 版本内置了攻击距离修改，已被禁止进入。<newline><gold>受影响版本：1.18.2-1.19.3<newline><newline><red>详见 https://github.com/MinecraftForge/MinecraftForge/issues/9309"

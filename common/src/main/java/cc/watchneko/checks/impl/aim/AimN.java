@@ -1,6 +1,6 @@
 package cc.watchneko.checks.impl.aim;
 
-import cc.watchneko.analysis.aim.AimTargetTraceUtil;
+import cc.watchneko.utils.aim.AimTargetTraceUtil;
 import cc.watchneko.checks.Check;
 import cc.watchneko.checks.CheckData;
 import cc.watchneko.checks.type.RotationCheck;

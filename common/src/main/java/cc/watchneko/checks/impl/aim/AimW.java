@@ -1,115 +1,71 @@
 package cc.watchneko.checks.impl.aim;
 
-import cc.watchneko.analysis.aim.trajectory.*;
 import cc.watchneko.checks.Check;
 import cc.watchneko.checks.CheckData;
-import cc.watchneko.checks.impl.aim.processor.AimProcessor;
-import cc.watchneko.checks.type.PacketCheck;
+import cc.watchneko.checks.type.RotationCheck;
 import cc.watchneko.player.PlayerData;
-import com.github.retrooper.packetevents.event.PacketReceiveEvent;
-import com.github.retrooper.packetevents.protocol.entity.type.EntityTypes;
-import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientPlayerFlying;
+import cc.watchneko.utils.anticheat.update.RotationUpdate;
+import cc.watchneko.utils.data.Pair2;
+import cc.watchneko.utils.lists.EvictingList;
+import cc.watchneko.utils.math.MathUtil;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 @CheckData(
         name = "AimW",
         configName = "AimW",
-        decay = 0.85
+        decay = 0.65,
+        description = "Detect abnormal horizontal rotation patterns during attacks"
 )
-public class AimW extends Check implements PacketCheck {
-    private final DetectionContext context;
-    private final List<AimDetectionStrategy> detectionStrategies;
-    public ArrayList<Rotation> rotations = new ArrayList<>();
+public final class AimW extends Check implements RotationCheck {
+    private final EvictingList<Pair2<Double, Double>> rotations = new EvictingList<>(10);
+    private final EvictingList<Pair2<Integer, Integer>> rotationsG = new EvictingList<>(10);
 
     public AimW(PlayerData player) {
         super(player);
-        detectionStrategies = List.of(
-                new AccelerationDetection(),
-                new AimPathAnalysis(),
-                new CorrelationAnalysis(),
-                new CoordinationDetection(),
-                new FrictionDetection()
-        );
-        context = new DetectionContext(player);
     }
 
     @Override
-    public void onPacketReceive(PacketReceiveEvent event) {
-        if (!WrapperPlayClientPlayerFlying.isFlying(event.getPacketType())) return;
-        if (player.packetStateData.lastPacketWasTeleport) {
-            resetDetectionStrategies();
-            return;
-        }
-        if (!shouldModifyPackets()) {
-            return;
-        }
+    public void process(RotationUpdate update) {
+        if (player.actionManager.hasAttackedSince(1200L)) {
+            double deltaYaw = update.getProcessor().getDeltaYaw();
+            double deltaPitch = update.getProcessor().getDeltaPitch();
+            double gcdValue = MathUtil.getGCDValueStatistic(0.5) * 3;
+            rotations.add(new Pair2<>(deltaYaw, deltaPitch));
+            rotationsG.add(new Pair2<>((int) (deltaYaw / gcdValue), (int) (deltaPitch / gcdValue)));
+            if (rotations.isFull()) {
+                List<Double> x = new ArrayList<>();
+                List<Double> y = new ArrayList<>();
+                List<Integer> xG = new ArrayList<>();
+                List<Integer> yG = new ArrayList<>();
+                for (Pair2<Double, Double> vec2 : rotations) {
+                    x.add(vec2.x());
+                    y.add(vec2.y());
+                }
+                for (Pair2<Integer, Integer> vec2 : rotationsG) {
+                    xG.add(vec2.x());
+                    yG.add(vec2.y());
+                }
 
-        final float movedYaw = player.getYaw() - player.getLastYaw();
-        final float movedPitch = player.getPitch() - player.getLastPitch();
-        rotations.add(new Rotation(movedYaw, movedPitch));
-        if (rotations.size() > 100) {
-            rotations.remove(0);
+                double devX = MathUtil.getVariance(xG);
+                double devY = MathUtil.getVariance(yG);
+                double min = Math.min(devX, devY);
+                double max = Math.max(devX, devY);
+                // The window is 10 samples, so these were 0.09 and 35 against an un-normalised sum of
+                // squares; they are divided by 10 to stay the same fraction of the spread now that
+                // getVariance returns a real variance.
+                if (min < 0.009 && max > 3.5 && Collections.min(yG) != 0.0) {
+                    if (buffer++ > 4) {
+                        if (flagAndAlert("low= " + min + "\nmax= " + max) && getViolations() > 5) {
+                            player.mitigateDamage();
+                        }
+                    } else {
+                        rewardBufferAndVL();
+                    }
+                }
+            }
         }
-        if (!player.actionManager.hasAttackedSince(2000L)) {
-            resetDetectionStrategies();
-            return;
-        }
-        if (player.getTarget() == null) {
-            resetDetectionStrategiesChangeTarget();
-            return;
-        }
-        if (player.getLastTarget() != player.getTarget()) {
-            resetDetectionStrategiesChangeTarget();
-            return;
-        }
-        if (player.getTarget().type != EntityTypes.PLAYER) {
-            resetDetectionStrategiesChangeTarget();
-            return;
-        }
-
-        updateDetectionContext(player);
-        executeDetectionStrategies(player);
-        saveLastRotationValues();
-    }
-
-    private void updateDetectionContext(PlayerData profile) {
-        context.setRotations(rotations);
-        AimProcessor processor = profile.checkManager.getRotationCheck(AimProcessor.class);
-        context.setDeltaYaw(processor.deltaYaw % 360F);
-        context.setDeltaPitch(processor.deltaPitch);
-        if (profile.getTarget() != null) {
-            context.setOptimalYaw(processor.optimalYaw);
-        }
-        final float movedYaw = player.getYaw() - player.getLastYaw();
-        final float movedPitch = player.getPitch() - player.getLastPitch();
-        context.updateMovementData(profile.getYaw(), profile.getPitch(), time());
-        context.updateRotation(new Rotation(profile.getYaw(), profile.getPitch()));
-        context.updateRotationDelta(new Rotation(movedYaw, movedPitch));
-    }
-
-    private void executeDetectionStrategies(PlayerData profile) {
-        for (AimDetectionStrategy strategy : detectionStrategies) {
-            strategy.detect(profile, context);
-        }
-    }
-
-    private void resetDetectionStrategies() {
-        for (AimDetectionStrategy strategy : detectionStrategies) {
-            strategy.reset();
-        }
-    }
-
-    private void resetDetectionStrategiesChangeTarget() {
-        for (AimDetectionStrategy strategy : detectionStrategies) {
-            strategy.changeTarget();
-        }
-    }
-
-    private void saveLastRotationValues() {
-        context.setLastDeltaYaw(context.getDeltaYaw());
-        context.setLastDeltaPitch(context.getDeltaPitch());
-        context.setLastOptimalYaw(context.getOptimalYaw());
     }
 }

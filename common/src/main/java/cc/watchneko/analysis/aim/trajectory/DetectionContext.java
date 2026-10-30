@@ -1,6 +1,6 @@
 package cc.watchneko.analysis.aim.trajectory;
 
-import cc.watchneko.checks.impl.aim.AimW;
+import cc.watchneko.checks.impl.aim.AimV;
 import cc.watchneko.player.PlayerData;
 import cc.watchneko.utils.math.MathUtil;
 
@@ -68,7 +68,7 @@ public class DetectionContext {
     }
 
     public void flagDetection(AimDetectionStrategy strategy, String reason) {
-        if (playerData.checkManager.getCheck(AimW.class).flagAndAlert(strategy.getCheckName() + " | " + reason)) {
+        if (playerData.checkManager.getCheck(AimV.class).flagAndAlert(strategy.getCheckName() + " | " + reason)) {
             playerData.mitigateDamage();
         }
     }

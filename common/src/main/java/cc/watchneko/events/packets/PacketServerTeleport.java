@@ -33,6 +33,12 @@ public class PacketServerTeleport extends PacketListenerAbstract {
             PlayerData player = WatchNekoAPI.INSTANCE.getPlayerDataManager().getPlayer(event.getUser());
             if (player == null) return;
 
+            // Recorded before anything else: the client's next few rotation packets are produced against
+            // a position it has not fully reconciled yet, and checks that sample rotations need to know
+            // when the teleport happened, not merely which client packet acknowledged it.
+            player.lastServerTeleport = System.currentTimeMillis();
+            player.ignoreNextRotation = true;
+
             WrapperPlayServerPlayerPositionAndLook teleport = new WrapperPlayServerPlayerPositionAndLook(event);
 
             Vector3d pos = new Vector3d(teleport.getX(), teleport.getY(), teleport.getZ());

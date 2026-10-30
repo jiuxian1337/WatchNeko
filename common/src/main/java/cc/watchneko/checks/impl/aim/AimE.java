@@ -2,7 +2,6 @@ package cc.watchneko.checks.impl.aim;
 
 import cc.watchneko.checks.Check;
 import cc.watchneko.checks.CheckData;
-import cc.watchneko.checks.impl.aim.processor.AimProcessor;
 import cc.watchneko.checks.type.RotationCheck;
 import cc.watchneko.player.PlayerData;
 import cc.watchneko.utils.anticheat.update.RotationUpdate;
@@ -14,7 +13,6 @@ import com.github.retrooper.packetevents.protocol.entity.type.EntityTypes;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 @CheckData(
         name = "AimE",
@@ -26,8 +24,8 @@ public class AimE extends Check implements RotationCheck {
     private static final int RAW_ROTATIONS_THRESHOLD = 100;
     private static final int SCORE_CHUNK_SIZE = 10;
 
-    private final List<Vec2f> rawRotations = new CopyOnWriteArrayList<>();
-    private final List<Vec2f> limitedRotations = new CopyOnWriteArrayList<>();
+    private final List<Vec2f> rawRotations = new ArrayList<>();
+    private final List<Vec2f> limitedRotations = new ArrayList<>();
     private final List<Float> longTermAnalysis = new ArrayList<>();
     private double scoreBuffer;
     private double distributionBuffer;
@@ -50,11 +48,6 @@ public class AimE extends Check implements RotationCheck {
         if (player.getTarget() == null) {
             return;
         }
-        if (hasExemptions()) {
-            reduceAllBuffers(0.80, 0.3);
-            rawRotations.clear();
-            return;
-        }
 
         standTicks = player.isMoving() ? 0 : standTicks + 1;
         if (standTicks > 20) {
@@ -72,7 +65,9 @@ public class AimE extends Check implements RotationCheck {
         if (rawRotations.size() >= RAW_ROTATIONS_THRESHOLD) {
             checkRotationData();
         }
-        if ((player.calculateSensitivity() > 50 && Math.abs(delta.x()) > 1.35) || (Math.abs(delta.y()) > 1.35 && Math.abs(delta.x()) > 0.32)) {
+        // Any sizeable rotation feeds the limited window. Sensitivity is deliberately not gated here:
+        // low-sensitivity clients produce the same shapes and would otherwise go unchecked.
+        if (Math.abs(delta.x()) > 1.35 || (Math.abs(delta.y()) > 1.35 && Math.abs(delta.x()) > 0.32)) {
             limitedRotations.add(delta);
             if (limitedRotations.size() >= 100) {
                 checkLimited();
@@ -83,16 +78,10 @@ public class AimE extends Check implements RotationCheck {
     private void checkRotationData() {
         List<Float> yawChanges = new ArrayList<>();
         List<Float> pitchChanges = new ArrayList<>();
-        final List<Long> xGcd = new ArrayList<>();
-        final int sens = player.calculateSensitivity();
-        final float gcdValue = sens > 0 ? MathUtil.getGCDValue(AimProcessor.getSENSITIVITY_MCP_VALUES()[sens - 1]) : 0;
 
         for (Vec2f vec : rawRotations) {
             yawChanges.add(vec.x());
             pitchChanges.add(vec.y());
-            if (gcdValue != 0) {
-                xGcd.add((long) (vec.x() / gcdValue));
-            }
         }
 
         checkScore(yawChanges);
@@ -123,10 +112,14 @@ public class AimE extends Check implements RotationCheck {
 
         List<Double> outliers = MathUtil.getZScoreOutliers(deviations, 0.5f);
         float distinctRank = (float) distinctCount / 60;
-        if (outliers.isEmpty()) {
-            return;
-        }
-        if (outliers.size() == 1 && Math.abs(outliers.get(0)) > 18 && Math.abs(outliers.get(0)) < 100) {
+
+        // Two shapes of the same signal: either no outlier at all (every chunk looks alike), or exactly
+        // one outlier far outside the normal range. Both indicate a machine-generated rotation stream.
+        final boolean noOutlier = outliers.isEmpty();
+        final boolean oneExtremeOutlier = outliers.size() == 1
+                && Math.abs(outliers.get(0)) > 18 && Math.abs(outliers.get(0)) < 100;
+
+        if (noOutlier || oneExtremeOutlier) {
             if (!query) {
                 query = true;
             } else if (++outlierBuffer > 5) {

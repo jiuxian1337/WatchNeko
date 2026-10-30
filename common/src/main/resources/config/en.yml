@@ -1,8 +1,7 @@
 # WatchNeko main configuration
 # Source code: https://github.com/jiuxian1337/WatchNeko
+# Based on Grim (https://github.com/GrimAnticheat/Grim)
 # Copyright 2025 DefineOutside and contributors, Licensed under GPLv3.
-# Modified binaries, or plugins with copied grim code, must be private,
-# or with full source code available to buyers at no additional cost.
 
 alerts:
     # In addition to broadcasting alerts to players, should they also be sent to the console?
@@ -11,9 +10,9 @@ alerts:
     # You must have 'bungee-plugin-message-channel' enabled in your Velocity's configuration if Velocity is in use.
     proxy:
         # Should alerts be sent to other servers connected to your proxy?
-        send: false
+        send: true
         # Should the alerts received from other servers be announced to this server?
-        receive: false
+        receive: true
 
     hover:
         enabled: true
@@ -35,7 +34,7 @@ client-brand:
         - "^lunarclient:v\\d+\\.\\d+\\.\\d+-\\d{4}$"
         - "^Feather Fabric$"
         - "^labymod$"
-    # Grim will blacklist specific Forge versions which include built-in Reach hacks (Forge 1.18.2 to 1.19.3).
+    # Blacklist Forge versions that include built-in Reach hacks (Forge 1.18.2 to 1.19.3).
     # Setting this option to false will allow said clients to connect to the server. Disable this at your own risk.
     disconnect-blacklisted-forge-versions: true
 
@@ -49,7 +48,7 @@ spectators:
 # How long should players have until we kick them for timing out? Default = 60 seconds
 max-transaction-time: 60
 
-# Enable this to stop Grim cancelling pongs received from players.
+# Enable this to stop cancelling pongs received from players.
 # This may improve compatibility with other anticheats. It may cause issues with packet limiters.
 # Do not enable this if you are not sure what you are doing.
 disable-pong-cancelling: false
@@ -70,9 +69,8 @@ Simulation:
     # This is what the default config looks like (x axis = seconds, y axis = 1/1000 block): https://www.desmos.com/calculator/d4ufgxrxer
     setback-decay-multiplier: 0.999
     # How large of an offset from the player's movement should we create a violation for?
-    # Measured in blocks from the possible movement
-    # We account for Optifine by switching trig tables but dropping this to 0.001 will reduce FastMath
-    # flagging the anticheat if this compensation doesn't work...
+    # Measured in blocks from the possible movement.
+    # Lower values catch more, but also flag players using OptiFine's faster math more often.
     threshold: 0.03
     # How large of a violation in a tick before the player gets immediately setback?
     # -1 to disable
@@ -90,7 +88,7 @@ Simulation:
 
 # Checks to see if a player entered a block during a movement
 Phase:
-    setbackvl: 1 # Glitching into blocks can allow wall climbing, plus this check is relatively stable
+    setbackvl: 1 # Entering blocks can allow wall climbing; this check is stable enough to act early
     decay: 0.005
 
 NoFallB:
@@ -123,7 +121,7 @@ ScaffoldB:
     angle: true
     time:
         # Checks if downward scaffold placements are happening too quickly
-        active: true
+        active: false
         # Minimum average interval between placements, in ticks
         average: 2
     # Checks for sprint-assisted downward placements shortly after sprinting
@@ -148,8 +146,7 @@ ScaffoldD:
     cancel-for-ms: 500
 
 # Prediction-based no slow check
-# Grim accounts for buggy netcode here... hard to false even when spamming right click and offhand button
-# Much more stable than other anticheats, but please report any falses... I have fixed a ton of netcode issues here.
+# Tolerant of the server's own netcode quirks, so it stays quiet while you spam right click and offhand.
 NoSlowA:
     # How much of an offset is "cheating"
     # By default this is lower than other offs
@@ -301,8 +298,87 @@ AnalysisA:
     local-gate-min-energy: 1.25
     # How long to keep sending only energetic samples after a 429, in milliseconds.
     quota-cooldown-ms: 30000
+    # How long the player deals no damage after a flag, in milliseconds.
+    mitigate-damage-ms: 5000
     # Print dropped samples and cloud failures to the console.
     debug-log: false
+
+# Heuristic aim checks: they look at the shape of the rotation stream, and are tuned per check.
+AnalysisB:
+    # Points a randomizer flaw is worth. 0 disables that test.
+    randomizer-flaw-add-vl: 25
+    # Component score ceiling; AnalysisC alerts once it is crossed.
+    component-vl-limit: 400
+    # How much the component score fades after each window.
+    component-vl-fade: 5
+    # Interpolation score ceiling; AnalysisD alerts once it is crossed.
+    interpolation-vl-limit: 400
+    # How much the interpolation score fades after each window.
+    interpolation-vl-fade: 5
+
+AnalysisC:
+    # How long the player deals no damage after a flag, in milliseconds.
+    mitigate-damage-ms: 3500
+
+AnalysisD:
+    # How long the player deals no damage after a flag, in milliseconds.
+    mitigate-damage-ms: 2500
+
+AnalysisE:
+    # Trigger thresholds for the three constant-rotation tests; higher is quieter.
+    constant1-need-vl: 8
+    constant2-need-vl: 6
+    constant3-need-vl: 6
+    # How long the player deals no damage after a flag, in milliseconds.
+    mitigate-damage-ms: 4000
+
+AnalysisF:
+    # How many sample windows in a row must look suspicious; higher is quieter.
+    buffer: 2
+    # How long the player deals no damage after a flag, in milliseconds.
+    mitigate-damage-ms: 4000
+
+AnalysisG:
+    # How many sample windows in a row must contain a repeating pattern; higher is quieter.
+    buffer: 2.5
+    # How much the buffer decays after a clean window.
+    buffer-fade: 0.3
+    # How long the player deals no damage after a flag, in milliseconds.
+    mitigate-damage-ms: 5000
+
+AnalysisH:
+    # Evidence needed to trigger; higher is quieter.
+    buffer: 3.0
+    # How many ticks without a huge rotation before the buffer is cleared.
+    ticks-to-reset: 2500
+
+AnalysisJ:
+    # Buffer ceilings for the three statistics verdicts; higher is quieter.
+    iqr-vl-limit: 11.0
+    zfactor-vl-limit: 7.0
+    improbable-vl-limit: 15.0
+
+AnalysisK:
+    # How long the player deals no damage after a flag, in milliseconds.
+    mitigate-damage-ms: 0
+
+AnalysisL:
+    # How long the player deals no damage after a flag, in milliseconds.
+    mitigate-damage-ms: 5500
+
+AnalysisM:
+    # Buffer ceilings for the three complex verdicts; higher is quieter.
+    entropy-vl-limit: 30
+    distinct-vl-limit: 4.0
+    randomizer-vl-limit: 2.5
+
+AnalysisN:
+    # How long the player deals no damage after a flag, in milliseconds.
+    mitigate-damage-ms: 5000
+
+AnalysisO:
+    # How long the player deals no damage after a flag, in milliseconds.
+    mitigate-damage-ms: 3000
 
 exploit:
     # You can gain high speeds when sprint jumping with an elytra, this prevents the exploit when set to false
@@ -334,8 +410,8 @@ reset-item-usage-on-item-update: true
 reset-item-usage-on-attack: true
 reset-item-usage-on-slot-change: true
 
-# Grim sometimes cancels illegal packets such as with timer, after X packets in a second cancelled, when should
-# we simply kick the player? This is required as some packet limiters don't count packets cancelled by grim.
+# Illegal packets (for example from a timer cheat) are cancelled. After this many cancellations in one
+# second, kick the player instead. Needed because some packet limiters do not count cancelled packets.
 packet-spam-threshold: 100
 # Enable this to print a stacktrace when a player is kicked due to packet-spam-threshold
 debug-packet-cancel: false
@@ -345,8 +421,7 @@ debug-packet-cancel: false
 # This also closes some lag-compensation bypasses. To disable, use -1
 transaction-skip-limit: 50
 
-# Grim is able to enforce that a player set out of flying state cannot have more than X milliseconds of ping
-# This is due to Grim not currently checking flying players
+# Enforce a maximum ping for players who are not in a flying state. Flying players are not checked here.
 # To disable, use -1
 max-ping-out-of-flying: 1000
 
@@ -372,4 +447,4 @@ history:
 
 
 # Do not edit this line: the plugin rewrites it with the current version on startup.
-config-version: 10
+config-version: 11
