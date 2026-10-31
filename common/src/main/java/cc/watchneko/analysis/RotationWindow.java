@@ -68,6 +68,11 @@ public final class RotationWindow {
         return frames.size();
     }
 
+    public long oldestSequence() {
+        final Frame oldest = frames.peekFirst();
+        return oldest == null ? Long.MAX_VALUE : oldest.sequence();
+    }
+
     /**
      * Extracts the window centred on {@code centerSequence}, or empty when it is not yet complete — either
      * because the anchor is unknown to this buffer, or because fewer than {@link #RADIUS} rotation updates

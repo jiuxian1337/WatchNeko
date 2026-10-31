@@ -93,6 +93,9 @@ public final class AnalysisA extends Check implements RotationCheck, AttackSigna
 
     @Override
     public void onAttack(final AttackAnchor anchor) {
+        if (!shouldModifyPackets() || CloudGateway.current() == null) {
+            return;
+        }
         pendingAnchors.addLast(anchor.rotationSequence());
     }
 
@@ -121,6 +124,13 @@ public final class AnalysisA extends Check implements RotationCheck, AttackSigna
     private void collectCompletedSamples(final CloudGateway gateway) {
         while (!pendingAnchors.isEmpty()) {
             final long center = pendingAnchors.peekFirst();
+
+            if (center < window.oldestSequence()) {
+                pendingAnchors.removeFirst();
+                debug("dropped an anchor that fell behind the window (seq=" + center + ")");
+                continue;
+            }
+
             final Optional<RotationWindow.ExtractedWindow> extracted = window.extract(center);
             if (extracted.isEmpty()) {
                 return;
