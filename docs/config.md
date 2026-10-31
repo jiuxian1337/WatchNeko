@@ -449,6 +449,8 @@ ScaffoldB:
 ```yaml
 NoSlowA:
     threshold: 0.01
+    buffer-threshold: 5
+    buffer-decay: 0.2
     setbackvl: 0
     decay: 0.25
 ```
@@ -458,6 +460,8 @@ NoSlowA:
 | 设置 | 说明 |
 |---|---|
 | `threshold` | 多少偏移算作弊。**0.03–0.2 之间的值和原版 NoSlow 一致** |
+| `buffer-threshold` | 缓冲值达到多少才判定。越小越敏感 |
+| `buffer-decay` | 玩家正常使用物品并被减速时，每 tick 减少多少缓冲值 |
 | `setbackvl` | 违规多少次拉回。`0` = 不拉回 |
 | `decay` | 玩家正常使用物品并被减速时，违规值衰减多少 |
 

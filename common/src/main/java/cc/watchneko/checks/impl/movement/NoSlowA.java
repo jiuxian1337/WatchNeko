@@ -16,6 +16,8 @@ public class NoSlowA extends Check implements PostPredictionCheck {
     public boolean didSlotChangeLastTick = false;
     double offsetToFlag;
     double bestOffset = 1;
+    double bufferThreshold = 5;
+    double bufferDecay = 0.2;
 
     public NoSlowA(PlayerData player) {
         super(player);
@@ -33,7 +35,7 @@ public class NoSlowA extends Check implements PostPredictionCheck {
                 return;
             }
 
-            if (buffer >= 2) {
+            if (buffer >= bufferThreshold) {
                 ItemStack spigotItem = player.platformPlayer.getInventory().getItemInHand();
                 ItemStack grimItem = player.inventory.getHeldItem();
                 if (flagAndAlertWithSetback("bo=" + bestOffset + ", si=" + spigotItem + ", gi=" + grimItem)) {
@@ -46,7 +48,7 @@ public class NoSlowA extends Check implements PostPredictionCheck {
                 buffer++;
             } else {
                 reward();
-                buffer = Math.max(0, buffer - 0.25);
+                buffer = Math.max(0, buffer - bufferDecay);
             }
         } else {
             buffer = 0;
@@ -62,5 +64,7 @@ public class NoSlowA extends Check implements PostPredictionCheck {
     @Override
     public void onReload(ConfigManager config) {
         offsetToFlag = config.getDoubleElse(getConfigName() + ".threshold", 0.001);
+        bufferThreshold = config.getDoubleElse(getConfigName() + ".buffer-threshold", 5);
+        bufferDecay = config.getDoubleElse(getConfigName() + ".buffer-decay", 0.2);
     }
 }
