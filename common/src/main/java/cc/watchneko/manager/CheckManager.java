@@ -96,11 +96,13 @@ public class CheckManager {
     private final ClassToInstanceMap<RotationCheck> rotationChecks;
     private final ClassToInstanceMap<VehicleCheck> vehicleChecks;
     private final ClassToInstanceMap<PacketCheck> prePredictionChecks;
+    private final ClassToInstanceMap<PacketCheck> experimentalCrashChecks;
     private final ClassToInstanceMap<BlockBreakCheck> blockBreakChecks;
     private final ClassToInstanceMap<BlockPlaceCheck> blockPlaceChecks;
     private final ClassToInstanceMap<PostPredictionCheck> postPredictionChecks;
     private final PlayerData player;
     private PacketEntityReplication packetEntityReplication = null;
+    private PacketReceiveEvent rejectedByExperimentalCrash;
     public CheckManager(PlayerData player) {
         this.player = player;
         packetChecks = new ImmutableClassToInstanceMap.Builder<PacketCheck>()
@@ -303,6 +305,19 @@ public class CheckManager {
                 .put(VehicleTimer.class, new VehicleTimer(player))
                 .build();
 
+        experimentalCrashChecks = new ImmutableClassToInstanceMap.Builder<PacketCheck>()
+                .put(CrashN.class, new CrashN(player))
+                .put(CrashL.class, new CrashL(player))
+                .put(CrashJ.class, new CrashJ(player))
+                .put(CrashK.class, new CrashK(player))
+                .put(CrashO.class, new CrashO(player))
+                .put(CrashP.class, new CrashP(player))
+                .put(CrashQ.class, new CrashQ(player))
+                .put(CrashR.class, new CrashR(player))
+                .put(CrashS.class, new CrashS(player))
+                .put(CrashM.class, new CrashM(player))
+                .build();
+
         blockBreakChecks = new ImmutableClassToInstanceMap.Builder<BlockBreakCheck>()
                 .put(AirLiquidBreak.class, new AirLiquidBreak(player))
                 .put(WrongBreak.class, new WrongBreak(player))
@@ -345,6 +360,7 @@ public class CheckManager {
                 .putAll(postPredictionChecks)
                 .putAll(blockPlaceChecks)
                 .putAll(prePredictionChecks)
+                .putAll(experimentalCrashChecks)
                 .putAll(blockBreakChecks)
                 .putAll(noneModules)
                 .build();
@@ -378,6 +394,23 @@ public class CheckManager {
         }
     }
 
+    public void onExperimentalCrashReceive(PacketReceiveEvent packet) {
+        for (PacketCheck check : experimentalCrashChecks.values()) {
+            check.onPacketReceive(packet);
+            if (packet.isCancelled()) {
+                rejectedByExperimentalCrash = packet;
+                packet.getPostTasks().add(() -> {
+                    if (rejectedByExperimentalCrash == packet) rejectedByExperimentalCrash = null;
+                });
+                return;
+            }
+        }
+    }
+
+    public boolean wasRejectedByExperimentalCrash(PacketReceiveEvent packet) {
+        return rejectedByExperimentalCrash == packet;
+    }
+
     public void onPacketReceive(final PacketReceiveEvent packet) {
         for (PacketCheck check : packetChecks.values()) {
             check.onPacketReceive(packet);
@@ -397,6 +430,9 @@ public class CheckManager {
     }
 
     public void onPacketSend(final PacketSendEvent packet) {
+        for (PacketCheck check : experimentalCrashChecks.values()) {
+            check.onPacketSend(packet);
+        }
         for (PacketCheck check : prePredictionChecks.values()) {
             check.onPacketSend(packet);
         }

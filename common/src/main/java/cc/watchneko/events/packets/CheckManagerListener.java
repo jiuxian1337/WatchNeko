@@ -618,6 +618,7 @@ public class CheckManagerListener extends PacketListenerAbstract {
     public void onPacketReceive(PacketReceiveEvent event) {
         PlayerData player = WatchNekoAPI.INSTANCE.getPlayerDataManager().getPlayer(event.getUser());
         if (player == null) return;
+        if (player.checkManager.wasRejectedByExperimentalCrash(event)) return;
 
         if (event.getConnectionState() != ConnectionState.PLAY) {
             // Allow checks to listen to configuration packets

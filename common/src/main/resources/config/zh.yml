@@ -226,6 +226,53 @@ Reach:
     # 除非你是专注于 1.8 PvP 的服务器，否则不建议使用这个额外的数据包
     enable-post-packet: false
 
+# 实验性 Crash 检查的限额。启用状态由 experimental-checks 控制。
+CrashJ:
+    max-edit-bytes: 98304
+    max-edits-per-second: 10
+    min-edit-interval-ms: 100
+
+CrashK:
+    max-stack-amount: 99
+    max-enchantment-level: 255
+    max-name-bytes: 4096
+    max-lore-bytes: 16384
+
+CrashL:
+    max-packets-per-second: 750
+    max-packets-per-type-per-second: 120
+    max-commands-per-second: 30
+    max-inventory-bytes-per-second: 524288
+    max-changed-slots-per-second: 1024
+    max-dialog-bytes-per-second: 262144
+
+CrashM:
+    max-items-per-packet: 512
+    max-item-depth: 6
+    max-nbt-elements: 8192
+    max-nbt-depth: 48
+    max-book-page-bytes: 4096
+    max-dialog-bytes: 32768
+
+CrashN:
+    max-packet-bytes: 262144
+
+CrashO:
+    max-payload-bytes: 32767
+    max-registered-channels-per-packet: 128
+    blocked-channels: []
+
+CrashP:
+    max-sign-line-bytes: 384
+
+CrashR:
+    blocked-prefixes: []
+    blocked-fragments: []
+
+CrashS:
+    max-changed-slots: 128
+    max-hashed-components-per-stack: 128
+
 # Backtrack检测
 PingSpoofB:
     cancelvl: 0
@@ -411,7 +458,7 @@ exploit:
 # 启用在加入时注入 netty 的日志插件以调试兼容性问题
 debug-pipeline-on-join: false
 
-# 启用实验性检查
+# 启用由全局实验开关控制的检查。
 experimental-checks: false
 
 # 移动预测的全局开关。插件 API 调用方可以在运行时按玩家覆盖。

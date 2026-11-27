@@ -1,5 +1,6 @@
 package cc.watchneko.events.packets;
 
+import cc.watchneko.checks.impl.crash.CrashN;
 import cc.watchneko.player.PlayerData;
 import com.github.retrooper.packetevents.PacketEvents;
 import com.github.retrooper.packetevents.event.PacketReceiveEvent;
@@ -51,6 +52,11 @@ public final class ViaMovementInput extends ChannelInboundHandlerAdapter {
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) {
         var state = player.user.getDecoderState();
+        if (msg instanceof ByteBuf frame && (state == ConnectionState.PLAY || state == ConnectionState.CONFIGURATION)
+                && player.checkManager.getCheck(CrashN.class).discardBeforeTranslation(frame.readableBytes())) {
+            ReferenceCountUtil.release(msg);
+            return;
+        }
         ClientVersion client = player.user.getClientVersion();
         if (!(msg instanceof ByteBuf buffer) || client == null || state != ConnectionState.PLAY
                 || client == PacketEvents.getAPI().getServerManager().getVersion().toClientVersion()) {

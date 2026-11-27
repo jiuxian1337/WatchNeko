@@ -221,6 +221,53 @@ Reach:
     # Unless you are a 1.8 PvP focused server, this additional packet is not recommended
     enable-post-packet: false
 
+# Limits for the experimental Crash checks. Activation follows experimental-checks.
+CrashJ:
+    max-edit-bytes: 98304
+    max-edits-per-second: 10
+    min-edit-interval-ms: 100
+
+CrashK:
+    max-stack-amount: 99
+    max-enchantment-level: 255
+    max-name-bytes: 4096
+    max-lore-bytes: 16384
+
+CrashL:
+    max-packets-per-second: 750
+    max-packets-per-type-per-second: 120
+    max-commands-per-second: 30
+    max-inventory-bytes-per-second: 524288
+    max-changed-slots-per-second: 1024
+    max-dialog-bytes-per-second: 262144
+
+CrashM:
+    max-items-per-packet: 512
+    max-item-depth: 6
+    max-nbt-elements: 8192
+    max-nbt-depth: 48
+    max-book-page-bytes: 4096
+    max-dialog-bytes: 32768
+
+CrashN:
+    max-packet-bytes: 262144
+
+CrashO:
+    max-payload-bytes: 32767
+    max-registered-channels-per-packet: 128
+    blocked-channels: []
+
+CrashP:
+    max-sign-line-bytes: 384
+
+CrashR:
+    blocked-prefixes: []
+    blocked-fragments: []
+
+CrashS:
+    max-changed-slots: 128
+    max-hashed-components-per-stack: 128
+
 # Backtrack checks
 PingSpoofB:
     cancelvl: 0
@@ -411,7 +458,7 @@ exploit:
 # Enable logging plugins who have injected into netty on join to debug compatibility issues
 debug-pipeline-on-join: false
 
-# Enables experimental checks
+# Enables checks that depend on the global experimental setting.
 experimental-checks: false
 
 # Per-player prediction toggles. These are the config-level defaults; a plugin API caller can override

@@ -24,9 +24,11 @@ public final class PayloadCodec<P> {
 
     public P read(byte[] data) {
         Object buffer = copiedBuffer(data);
-        P payload = reader.apply(createUniversalPacketWrapper(buffer));
-        ByteBufHelper.release(buffer);
-        return payload;
+        try {
+            return reader.apply(createUniversalPacketWrapper(buffer));
+        } finally {
+            ByteBufHelper.release(buffer);
+        }
     }
 
     public byte @NotNull [] write(P payload) {
