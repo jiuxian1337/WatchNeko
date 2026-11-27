@@ -130,6 +130,7 @@ Punishments:
         remove-violations-after: 300
         checks:
             - "Break"
+            - "!LegacyFastBreak"
         commands:
             - "1:1 [log]"
             - "5:5 [alert]"
@@ -171,6 +172,18 @@ Punishments:
             - "5:5 [webhook]"
             - "5:5 [proxy]"
             - "25:0 kick %player% cheating"
+    InputTiming:
+        remove-violations-after: 300
+        checks:
+            - "AutoclickerC"
+            - "AutoclickerD"
+            - "AutoclickerE"
+            - "LegacyItemRelease"
+            - "LegacyEntityActions"
+            - "LegacyFastBreak"
+        commands:
+            - "1:1 [log]"
+            - "1:1 [alert]"
     AutoTotem:
         remove-violations-after: 300
         checks:
@@ -182,6 +195,13 @@ Punishments:
         remove-violations-after: 300
         checks:
             - "ChestStealer"
+        commands:
+            - "1:1 [log]"
+            - "1:1 [alert]"
+    AimX:
+        remove-violations-after: 300
+        checks:
+            - "AimX"
         commands:
             - "1:1 [log]"
             - "1:1 [alert]"
@@ -198,6 +218,7 @@ Punishments:
         remove-violations-after: 300
         checks:
             - "Aim"
+            - "!AimX"
             - "Analysis"
             - "!AnalysisC"
             - "!AnalysisD"
@@ -239,6 +260,9 @@ Punishments:
         remove-violations-after: 300
         checks:
             - "Autoclicker"
+            - "!AutoclickerC"
+            - "!AutoclickerD"
+            - "!AutoclickerE"
         commands:
             - "1:1 [log]"
             - "1:1 [alert]"

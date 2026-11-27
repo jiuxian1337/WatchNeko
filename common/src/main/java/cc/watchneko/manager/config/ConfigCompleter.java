@@ -29,9 +29,8 @@ import java.util.regex.Pattern;
  * already have a {@code config.yml}. This class closes that gap by inserting the missing blocks —
  * comments included — from the bundled resource into the user's file.
  *
- * <p>It only ever <em>inserts</em>. Existing lines are never rewritten, reordered or removed, so a value
- * the operator changed stays exactly as it is, and anything this parser fails to understand is left
- * alone rather than dropped. Running it twice adds nothing the second time.
+ * <p>Completion inserts missing keys and keeps operator values. The version marker and a renamed
+ * check's section header may be updated in place. Running it twice adds nothing the second time.
  *
  * <p>The parser is deliberately small: it understands the shape these four files actually use (nested
  * mappings, scalar leaves, inline comments and block sequences). It does not try to be a YAML
@@ -49,7 +48,7 @@ final class ConfigCompleter {
     private static final String VERSION_KEY = "config-version";
 
     /** A mapping key: leading spaces, the key, then anything (an inline value and/or a trailing comment). */
-    private static final Pattern KEY = Pattern.compile("^( *)([A-Za-z0-9_.\\-]+):(.*)$");
+    private static final Pattern KEY = Pattern.compile("^( *)([\"']?)([A-Za-z0-9_.\\-]+)\\2[ \\t]*:(.*)$");
 
     /**
      * A top-level version marker, matched anywhere so a stale one can be rewritten in place.
@@ -85,8 +84,8 @@ final class ConfigCompleter {
         return results;
     }
 
-    /** What happened to one file: the keys added, or the failure that stopped them. */
-    record Result(File file, List<String> added, Exception failure) {
+    /** The changes applied to one file, or the failure that stopped them. */
+    record Result(File file, List<String> updated, Exception failure) {
         boolean failed() {
             return failure != null;
         }
@@ -107,12 +106,8 @@ final class ConfigCompleter {
     static final Validation SNAKEYAML_VALIDATION = new Validation() {
         @Override
         public String check(final String yaml) {
-            final LoaderOptions options = new LoaderOptions();
-            // A duplicate key is what an interrupted earlier run could leave behind, and it is not what
-            // this check is for: it would reject files the loader itself accepts.
-            options.setAllowDuplicateKeys(true);
             try {
-                new Yaml(new SafeConstructor(options)).load(yaml);
+                loadYaml(yaml);
                 return null;
             } catch (final RuntimeException exception) {
                 return exception.getMessage();
@@ -123,29 +118,36 @@ final class ConfigCompleter {
     /** Swappable so a test can drive the failure path without writing invalid YAML by hand. */
     static Validation validation = SNAKEYAML_VALIDATION;
 
+    private static Object loadYaml(final String yaml) {
+        final LoaderOptions options = new LoaderOptions();
+        // Honor duplicate keys when the config loader accepts them.
+        options.setAllowDuplicateKeys(true);
+        return new Yaml(new SafeConstructor(options)).load(yaml);
+    }
+
     private static java.util.Optional<Result> completeFile(
             final File file, final String source, final List<String> defaults) throws IOException {
         final String text = Files.readString(file.toPath(), StandardCharsets.UTF_8);
         final String newline = text.contains("\r\n") ? "\r\n" : "\n";
         final List<String> userLines = splitLines(text);
 
-        final Merge merge = merge(userLines, defaults);
-        final List<String> added = new ArrayList<>(merge.added());
+        final List<String> updated = new ArrayList<>();
+        final List<String> migrated = source.equals(VERSIONED_SOURCE) ? migrateCheckSections(userLines, updated) : userLines;
+        final Merge merge = merge(migrated, defaults);
+        updated.addAll(merge.added());
 
         // The marker is forced to the current version every run, whether or not anything else changed.
         // It is a record of which release last touched this file, not an input to the completion: an
         // operator whose file claims a newer version still gets their missing keys. A bundled file with
         // no marker has no version to force, so the line is left exactly as the operator wrote it.
         final int version = source.equals(VERSIONED_SOURCE) ? currentVersion(defaults) : -1;
-        final List<String> completed = version < 0 ? merge.lines() : stampVersion(merge.lines(), version, added);
+        final List<String> completed = version < 0 ? merge.lines() : stampVersion(merge.lines(), version, updated);
 
         if (completed.equals(userLines)) {
             return java.util.Optional.empty();
         }
 
-        // Refuse to write a file the loader would then choke on. The merge only ever inserts, but an
-        // operator can hand this a file whose indentation makes the inserted block land somewhere it
-        // does not belong; parsing the result is a cheap way to find out before the damage is on disk.
+        // Check the result before replacing the user's config.
         final String rendered = String.join(newline, completed) + newline;
         final String problem = ConfigCompleter.validation.check(rendered);
         if (problem != null) {
@@ -159,7 +161,27 @@ final class ConfigCompleter {
         Files.copy(file.toPath(), backup.toPath(), StandardCopyOption.REPLACE_EXISTING);
         writeAtomically(file, rendered);
 
-        return java.util.Optional.of(new Result(file, added, null));
+        return java.util.Optional.of(new Result(file, updated, null));
+    }
+
+    private static List<String> migrateCheckSections(final List<String> lines, final List<String> updated) {
+        final List<Node> roots = parse(lines);
+        final List<String> migrated = new ArrayList<>(lines);
+        renameSection(roots, migrated, updated, "AutoclickerF", "AutoclickerB");
+        return migrated;
+    }
+
+    private static boolean renameSection(final List<Node> roots, final List<String> lines, final List<String> updated,
+                                         final String oldName, final String newName) {
+        final Node previous = find(roots, oldName);
+        if (previous == null || find(roots, newName) != null) return false;
+
+        final String header = lines.get(previous.lineIndex);
+        final int keyStart = header.indexOf(oldName);
+        lines.set(previous.lineIndex, header.substring(0, keyStart) + newName
+                + header.substring(keyStart + oldName.length()));
+        updated.add(oldName + " -> " + newName);
+        return true;
     }
 
     /**
@@ -378,9 +400,9 @@ final class ConfigCompleter {
             }
 
             final int indent = matcher.group(1).length();
-            final String rest = matcher.group(3);
+            final String rest = matcher.group(4);
             final Node node = new Node(
-                    matcher.group(2),
+                    matcher.group(3),
                     indent,
                     List.copyOf(comments),
                     line,

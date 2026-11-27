@@ -282,6 +282,15 @@ CrashS:
     max-changed-slots: 128
     max-hashed-components-per-stack: 128
 
+FairReach:
+    enabled: true
+    # Keep this false to observe which hits would be blocked.
+    block-impossible-hits: false
+    # Maximum compensation for unconfirmed target positions, plus time for client interpolation.
+    max-ping-compensation-ms: 300
+    # Additional distance allowance in blocks.
+    reach-leniency: 0.1
+
 # Backtrack checks
 PingSpoofB:
     cancelvl: 0
@@ -302,6 +311,10 @@ InteractA:
 InteractB:
     cancelvl: 0
 
+# Right-clicking an entity through blocks. Use -1 to log without cancelling.
+InteractC:
+    cancelvl: 0
+
 # Autoclicker
 AutoclickerA:
     # Collect swing delay as ticks=(ms/50), ignore delays >= this
@@ -317,6 +330,45 @@ AutoclickerA:
     # Entropy "jiff delta" thresholds
     entropy-jiff-min: 0.04
     entropy-jiff-max: 0.06
+
+# Experimental ordered combat swing windows. Requires experimental-checks.
+AutoclickerB:
+    enabled: false
+    window-size: 24
+    # Consecutive matching pairs of non-overlapping windows.
+    required-matches: 2
+    max-gap-ms: 350
+    combat-window-ms: 3000
+    min-correlation: 0.95
+    max-relative-error: 0.10
+    min-deviation-ms: 4.0
+
+# These input timing checks are enabled individually below.
+AutoclickerC:
+    # Combat click interval differences and repeated upper edges.
+    enabled: true
+AutoclickerD:
+    # Repeated starts and cancellations on the same block.
+    enabled: true
+AutoclickerE:
+    # Repeated rapid right-click intervals.
+    enabled: true
+LegacyItemRelease:
+    # Item releases from a known idle state on native legacy connections.
+    enabled: true
+LegacyEntityActions:
+    # Opposite sprint or sneak transitions within native legacy client ticks.
+    enabled: true
+LegacyFastBreak:
+    # Premature dig transitions on legacy clients with non-instant blocks.
+    enabled: true
+
+# Optional melee PvP rule. Counts main-hand swings during combat.
+CPSLimit:
+    enabled: true
+    max-cps: 20
+    damage-multiplier: 0.25
+    duration-ms: 250
 
 # Experimental totem replenishment patterns. Requires experimental-checks.
 AutoTotem:
@@ -347,6 +399,10 @@ AimS:
     max-deltaY: 0.0001
     ratio-threshold: 1000.0
     window-size: 5
+
+# Experimental correlation between observed turns and the compensated target direction.
+AimX:
+    enabled: true
 
 AnalysisA:
     # Cloud-assisted rotation detection. The plugin only samples and extracts features; the verdict comes

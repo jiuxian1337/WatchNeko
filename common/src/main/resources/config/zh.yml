@@ -287,6 +287,15 @@ CrashS:
     max-changed-slots: 128
     max-hashed-components-per-stack: 128
 
+FairReach:
+    enabled: true
+    # 保持 false 可观察哪些命中会被拦截。
+    block-impossible-hits: false
+    # 未确认的目标位置允许补偿的毫秒数，另计客户端插值时间。
+    max-ping-compensation-ms: 300
+    # 攻击距离额外容差，单位为方块。
+    reach-leniency: 0.1
+
 # Backtrack检测
 PingSpoofB:
     cancelvl: 0
@@ -307,6 +316,10 @@ InteractA:
 InteractB:
     cancelvl: 0
 
+# 穿墙右键实体。设为 -1 时只记录违规。
+InteractC:
+    cancelvl: 0
+
 # 连点器
 AutoclickerA:
     # 收集挥手延迟 ticks=(ms/50)，大于等于该值不计入
@@ -322,6 +335,45 @@ AutoclickerA:
     # 熵 jiff delta 阈值
     entropy-jiff-min: 0.04
     entropy-jiff-max: 0.06
+
+# 实验性战斗挥手顺序检查，需开启 experimental-checks。
+AutoclickerB:
+    enabled: false
+    window-size: 24
+    # 连续匹配的独立窗口对数量。
+    required-matches: 2
+    max-gap-ms: 350
+    combat-window-ms: 3000
+    min-correlation: 0.95
+    max-relative-error: 0.10
+    min-deviation-ms: 4.0
+
+# 以下输入时序检测由各自的 enabled 开关控制。
+AutoclickerC:
+    # 战斗点击的相邻间隔差分与反复出现的间隔上界。
+    enabled: true
+AutoclickerD:
+    # 反复开始并取消挖掘同一方块。
+    enabled: true
+AutoclickerE:
+    # 持续而稳定的快速右键间隔。
+    enabled: true
+LegacyItemRelease:
+    # 原生旧版连接中，空闲状态下反复释放物品。
+    enabled: true
+LegacyEntityActions:
+    # 原生旧版客户端在同一 tick 反复上报相反的冲刺或潜行状态。
+    enabled: true
+LegacyFastBreak:
+    # 旧版客户端非瞬挖方块的开始、完成与重开时序。
+    enabled: true
+
+# 可选近战 PvP 规则，统计战斗期间主手挥手。
+CPSLimit:
+    enabled: true
+    max-cps: 20
+    damage-multiplier: 0.25
+    duration-ms: 250
 
 # 实验性图腾补充检测，需开启 experimental-checks。
 AutoTotem:
@@ -352,6 +404,10 @@ AimS:
     max-deltaY: 0.0001
     ratio-threshold: 1000.0
     window-size: 5
+
+# 实验性检查，分析实际转向与补偿后目标所需转向的相关性。
+AimX:
+    enabled: true
 
 AnalysisA:
     # 云端旋转检测。插件只负责采样与特征提取，判定由云端给出。

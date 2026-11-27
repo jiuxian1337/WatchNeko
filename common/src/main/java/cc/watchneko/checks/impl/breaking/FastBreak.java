@@ -120,6 +120,10 @@ public class FastBreak extends Check implements BlockBreakCheck {
         }
     }
 
+    public boolean tracksNonInstantBreak(BlockBreak block) {
+        return block.position.equals(targetBlockPosition) && maximumBlockDamage > 0 && maximumBlockDamage < 1;
+    }
+
     private void clampBalance() {
         double balance = Math.max(1000, (player.getTransactionPing()));
         blockBreakBalance = GrimMath.clamp(blockBreakBalance, -balance, balance); // Clamp not Math.max in case other logic changes

@@ -63,10 +63,10 @@ public class ConfigManagerFileImpl implements ConfigManager, BasicReloadable {
         for (final ConfigCompleter.Result result : ConfigCompleter.completeAll(
                 WatchNekoAPI.class, config.getLanguage(), WatchNekoAPI.INSTANCE.getGrimPlugin().getDataFolder())) {
             if (result.failed()) {
-                LogUtil.error("Failed to add missing keys to " + result.file().getName(), result.failure());
+                LogUtil.error("Failed to update " + result.file().getName(), result.failure());
             } else {
-                LogUtil.info("Added " + result.added().size() + " missing key(s) to " + result.file().getName()
-                        + " (backup: " + result.file().getName() + ".bak): " + String.join(", ", result.added()));
+                LogUtil.info("Updated " + result.updated().size() + " key(s) in " + result.file().getName()
+                        + " (backup: " + result.file().getName() + ".bak): " + String.join(", ", result.updated()));
             }
         }
 

@@ -318,7 +318,7 @@ public class PlayerData implements GrimUser {
     private boolean resetItemUsageOnSlotChange;
     private boolean mitigateDamageEnabled = true;
     @Getter
-    private long mitigateDamageTime;
+    private volatile long mitigateDamageTime;
     private @Nullable UserConnection viaUserConnection;
 
     public PlayerData(@NonNull User user) {

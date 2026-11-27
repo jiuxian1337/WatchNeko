@@ -6,6 +6,10 @@ import cc.watchneko.checks.impl.aim.*;
 import cc.watchneko.checks.impl.aim.processor.AimProcessor;
 import cc.watchneko.checks.impl.aim.processor.Cinematic;
 import cc.watchneko.checks.impl.autoclicker.AutoclickerA;
+import cc.watchneko.checks.impl.autoclicker.AutoclickerB;
+import cc.watchneko.checks.impl.autoclicker.AutoclickerC;
+import cc.watchneko.checks.impl.autoclicker.AutoclickerD;
+import cc.watchneko.checks.impl.autoclicker.AutoclickerE;
 import cc.watchneko.checks.impl.analysis.AnalysisA;
 import cc.watchneko.checks.impl.analysis.AnalysisB;
 import cc.watchneko.checks.impl.analysis.AnalysisC;
@@ -27,6 +31,8 @@ import cc.watchneko.checks.impl.chat.ChatA;
 import cc.watchneko.checks.impl.chat.ChatB;
 import cc.watchneko.checks.impl.chat.ChatC;
 import cc.watchneko.checks.impl.chat.ChatD;
+import cc.watchneko.checks.impl.combat.CpsLimit;
+import cc.watchneko.checks.impl.combat.FairReach;
 import cc.watchneko.checks.impl.combat.Hitboxes;
 import cc.watchneko.checks.impl.combat.MultiInteractA;
 import cc.watchneko.checks.impl.combat.MultiInteractB;
@@ -40,6 +46,7 @@ import cc.watchneko.checks.impl.groundspoof.NoFallA;
 import cc.watchneko.checks.impl.groundspoof.NoFallB;
 import cc.watchneko.checks.impl.interact.InteractA;
 import cc.watchneko.checks.impl.interact.InteractB;
+import cc.watchneko.checks.impl.interact.InteractC;
 import cc.watchneko.checks.impl.inventory.*;
 import cc.watchneko.checks.impl.misc.ClientBrand;
 import cc.watchneko.checks.impl.misc.GhostBlockMitigation;
@@ -111,7 +118,10 @@ public class CheckManager {
                 .put(Reach.class, new Reach(player))
                 .put(ExploitC.class, new ExploitC(player)) // 必须前置这个检查
                 .put(InteractB.class, new InteractB(player))
+                .put(FairReach.class, new FairReach(player))
+                .put(InteractC.class, new InteractC(player))
                 .put(AutoclickerA.class, new AutoclickerA(player))
+                .put(AutoclickerB.class, new AutoclickerB(player))
                 .put(PingSpoofA.class, new PingSpoofA(player))
                 .put(PingSpoofB.class, new PingSpoofB(player))
                 .put(PingSpoofC.class, new PingSpoofC(player))
@@ -182,6 +192,13 @@ public class CheckManager {
                 .put(CrashF.class, new CrashF(player))
                 .put(CrashH.class, new CrashH(player))
                 .put(CrashI.class, new CrashI(player))
+                .put(AutoclickerC.class, new AutoclickerC(player))
+                .put(AutoclickerD.class, new AutoclickerD(player))
+                .put(AutoclickerE.class, new AutoclickerE(player))
+                .put(CpsLimit.class, new CpsLimit(player))
+                .put(LegacyItemRelease.class, new LegacyItemRelease(player))
+                .put(LegacyEntityActions.class, new LegacyEntityActions(player))
+                .put(LegacyFastBreak.class, new LegacyFastBreak(player))
                 .put(SetbackBlocker.class, new SetbackBlocker(player)) // Must be last class otherwise we can't check while blocking packets
                 .build();
 
@@ -208,6 +225,7 @@ public class CheckManager {
                 .put(AimJ.class, new AimJ(player))
                 .put(AimD.class, new AimD(player))
                 .put(AimE.class, new AimE(player))
+                .put(AimX.class, new AimX(player))
                 .put(AnalysisA.class, new AnalysisA(player))
                 .put(AnalysisB.class, new AnalysisB(player))
                 .put(AnalysisE.class, new AnalysisE(player))

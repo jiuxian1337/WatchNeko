@@ -3,6 +3,7 @@ package cc.watchneko.events.packets;
 import ac.grim.grimac.api.config.ConfigManager;
 import cc.watchneko.WatchNekoAPI;
 import cc.watchneko.checks.Check;
+import cc.watchneko.checks.impl.combat.FairReach;
 import cc.watchneko.checks.type.PacketCheck;
 import cc.watchneko.player.PlayerData;
 import cc.watchneko.utils.anticheat.LogUtil;
@@ -368,10 +369,12 @@ public class PacketEntityReplication extends Check implements PacketCheck {
             WrapperPlayServerDestroyEntities destroy = new WrapperPlayServerDestroyEntities(event);
 
             int[] destroyEntityIds = destroy.getEntityIds();
+            FairReach fairReach = player.checkManager.getCheck(FairReach.class);
 
             for (int entityID : destroyEntityIds) {
                 despawnedEntitiesThisTransaction.add(entityID);
                 player.compensatedEntities.serverPositionsMap.remove(entityID);
+                fairReach.forgetTarget(entityID);
                 // Remove the tracked vehicle (handling tracking knockback) if despawned
                 if (player.compensatedEntities.serverPlayerVehicle != null && player.compensatedEntities.serverPlayerVehicle == entityID) {
                     player.compensatedEntities.serverPlayerVehicle = null;
@@ -500,6 +503,9 @@ public class PacketEntityReplication extends Check implements PacketCheck {
         }
 
         int lastTrans = player.lastTransactionSent.get();
+        if (hasPos && data != null && data.getEntityType() == EntityTypes.PLAYER) {
+            player.checkManager.getCheck(FairReach.class).trackPosition(event, entityId, data, lastTrans + 1, isRelative);
+        }
 
         Runnable apply = () -> {
             PacketEntity entity = player.compensatedEntities.getEntity(entityId);
@@ -534,6 +540,7 @@ public class PacketEntityReplication extends Check implements PacketCheck {
     }
 
     private void addEntity(PacketSendEvent event, int entityID, UUID uuid, EntityType type, Vector3d position, float xRot, float yRot, List<EntityData<?>> entityMetadata, int extraData) {
+        player.checkManager.getCheck(FairReach.class).forgetTarget(entityID);
         if (!player.movementSimulation.isUnified() && despawnedEntitiesThisTransaction.contains(entityID)) {
             player.sendTransaction();
         }

@@ -1,6 +1,9 @@
 package cc.watchneko.events.packets;
 
 import cc.watchneko.WatchNekoAPI;
+import cc.watchneko.checks.impl.autoclicker.AutoclickerD;
+import cc.watchneko.checks.impl.breaking.FastBreak;
+import cc.watchneko.checks.impl.breaking.LegacyFastBreak;
 import cc.watchneko.checks.impl.packetorder.PacketOrderP;
 import cc.watchneko.player.PlayerData;
 import cc.watchneko.utils.anticheat.update.*;
@@ -569,6 +572,20 @@ public class CheckManagerListener extends PacketListenerAbstract {
         final BlockBreak blockBreak = new BlockBreak(player, packet.getBlockPosition(), packet.getBlockFace(), packet.getBlockFaceId(), action, packet.getSequence(), player.compensatedWorld.getBlock(packet.getBlockPosition()));
 
         player.checkManager.onBlockBreak(blockBreak);
+        AutoclickerD miningCadence = player.checkManager.getCheck(AutoclickerD.class);
+        LegacyFastBreak legacyFastBreak = player.checkManager.getCheck(LegacyFastBreak.class);
+        boolean recordCadence = miningCadence.isConfiguredEnabled();
+        boolean recordLegacyTiming = legacyFastBreak.isConfiguredEnabled();
+        if (recordCadence || recordLegacyTiming) {
+            boolean breakable = action != DiggingAction.START_DIGGING || BREAKABLE.apply(blockBreak.block.getType());
+            boolean nonInstant = player.checkManager.getCheck(FastBreak.class).tracksNonInstantBreak(blockBreak);
+            long receivedAt = System.nanoTime();
+            event.getPostTasks().add(() -> {
+                boolean accepted = breakable && !event.isCancelled() && !blockBreak.isCancelled();
+                if (recordCadence) miningCadence.onDig(blockBreak, accepted, nonInstant, receivedAt);
+                if (recordLegacyTiming) legacyFastBreak.onDig(blockBreak, accepted, nonInstant);
+            });
+        }
 
         if (blockBreak.isCancelled()) {
             event.setCancelled(true);

@@ -1,6 +1,7 @@
 package cc.watchneko.platform.bukkit.events;
 
 import cc.watchneko.WatchNekoAPI;
+import cc.watchneko.checks.impl.combat.CpsLimit;
 import cc.watchneko.player.PlayerData;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -14,14 +15,20 @@ public class DamageMitigationEvent implements Listener {
         if (!(event.getDamager() instanceof Player player)) {
             return;
         }
-        PlayerData grimPlayerlayer = findGrimPlayer(player.getUniqueId());
-        if (grimPlayerlayer == null || grimPlayerlayer.disableGrim) {
+        PlayerData data = findGrimPlayer(player.getUniqueId());
+        if (data == null || data.disableGrim) {
             return;
         }
-        if (grimPlayerlayer.getMitigateDamageTime() < System.currentTimeMillis()) {
-            return;
+        double multiplier = data.getMitigateDamageTime() >= System.currentTimeMillis() ? 0.05 : 1;
+        if (event.getEntity() instanceof Player && isMelee(event.getCause().name())) {
+            double cpsMultiplier = data.checkManager.getCheck(CpsLimit.class).damageMultiplier(player.getWorld().getUID(), System.nanoTime());
+            multiplier = Math.min(multiplier, cpsMultiplier);
         }
-        event.setDamage(event.getDamage() * 0.05);
+        if (multiplier < 1) event.setDamage(event.getDamage() * multiplier);
+    }
+
+    private static boolean isMelee(String cause) {
+        return cause.equals("ENTITY_ATTACK") || cause.equals("ENTITY_SWEEP_ATTACK");
     }
 
     private PlayerData findGrimPlayer(java.util.UUID uuid) {
