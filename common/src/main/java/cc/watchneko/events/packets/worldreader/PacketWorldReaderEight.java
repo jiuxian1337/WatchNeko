@@ -1,8 +1,10 @@
 package cc.watchneko.events.packets.worldreader;
 
 import cc.watchneko.player.PlayerData;
+import cc.watchneko.utils.chunks.ChunkSectionPool;
+import cc.watchneko.utils.latency.CompensatedWorld;
 import com.github.retrooper.packetevents.event.PacketSendEvent;
-import com.github.retrooper.packetevents.protocol.world.chunk.impl.v1_16.Chunk_v1_9;
+import com.github.retrooper.packetevents.protocol.world.chunk.BaseChunk;
 import com.github.retrooper.packetevents.protocol.world.chunk.palette.DataPalette;
 import com.github.retrooper.packetevents.protocol.world.chunk.palette.ListPalette;
 import com.github.retrooper.packetevents.protocol.world.chunk.palette.PaletteType;
@@ -32,7 +34,7 @@ public class PacketWorldReaderEight extends BasePacketWorldReader {
 
         for (int column = 0; column < columns; column++) {
             BitSet bitset = BitSet.valueOf(new long[]{mask[column]});
-            Chunk_v1_9[] chunkSections = new Chunk_v1_9[16];
+            BaseChunk[] chunkSections = new BaseChunk[16];
             readChunk(buffer, chunkSections, bitset);
 
             // 256 is the biome data at the end of the array
@@ -53,18 +55,28 @@ public class PacketWorldReaderEight extends BasePacketWorldReader {
         final int chunkZ = wrapper.readInt();
         boolean groundUp = wrapper.readBoolean();
 
-        BitSet mask = BitSet.valueOf(new long[]{(long) wrapper.readUnsignedShort()});
-        int size = wrapper.readVarInt(); // Ignore size
+        int sectionMask = wrapper.readUnsignedShort();
+        wrapper.readVarInt(); // Chunk payload length
+        if (isUnload(groundUp, sectionMask)) {
+            unloadChunk(event, player, chunkX, chunkZ);
+            event.setLastUsedWrapper(null);
+            return;
+        }
 
-        final Chunk_v1_9[] chunks = new Chunk_v1_9[16];
-        this.readChunk((ByteBuf) event.getByteBuf(), chunks, mask);
+        final BaseChunk[] chunks = new BaseChunk[16];
+        this.readChunk((ByteBuf) event.getByteBuf(), chunks, BitSet.valueOf(new long[]{sectionMask}));
 
         this.addChunkToCache(event, player, chunks, groundUp, chunkX, chunkZ);
 
         event.setLastUsedWrapper(null); // Make sure this incomplete packet isn't sent
     }
 
-    private void readChunk(final ByteBuf buf, final Chunk_v1_9[] chunks, final BitSet set) {
+    static boolean isUnload(boolean groundUp, int sectionMask) {
+        // The 1.8 client uses the section mask even when the packet carries biome data.
+        return groundUp && sectionMask == 0;
+    }
+
+    private void readChunk(final ByteBuf buf, final BaseChunk[] chunks, final BitSet set) {
         for (int ind = 0; ind < 16; ++ind) {
             if (set.get(ind)) {
                 chunks[ind] = readChunk(buf);
@@ -72,7 +84,7 @@ public class PacketWorldReaderEight extends BasePacketWorldReader {
         }
     }
 
-    public Chunk_v1_9 readChunk(final ByteBuf in) {
+    private BaseChunk readChunk(final ByteBuf in) {
         ListPalette palette = new ListPalette(4);
         BitStorage storage = new BitStorage(4, 4096);
         DataPalette dataPalette = new DataPalette(palette, storage, PaletteType.CHUNK);
@@ -108,6 +120,6 @@ public class PacketWorldReaderEight extends BasePacketWorldReader {
             dataPalette.storage.set(i, lastID);
         }
 
-        return new Chunk_v1_9(blockCount, dataPalette);
+        return ChunkSectionPool.shareLegacyPalette(CompensatedWorld.blockVersion, dataPalette, blockCount);
     }
 }

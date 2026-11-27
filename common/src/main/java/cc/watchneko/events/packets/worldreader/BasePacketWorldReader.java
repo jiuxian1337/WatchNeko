@@ -2,7 +2,9 @@ package cc.watchneko.events.packets.worldreader;
 
 import cc.watchneko.WatchNekoAPI;
 import cc.watchneko.player.PlayerData;
+import cc.watchneko.utils.chunks.ChunkSectionPool;
 import cc.watchneko.utils.chunks.Column;
+import cc.watchneko.utils.latency.CompensatedWorld;
 import cc.watchneko.utils.data.TeleportData;
 import com.github.retrooper.packetevents.event.PacketListenerAbstract;
 import com.github.retrooper.packetevents.event.PacketListenerPriority;
@@ -25,7 +27,7 @@ public class BasePacketWorldReader extends PacketListenerAbstract {
             PlayerData player = WatchNekoAPI.INSTANCE.getPlayerDataManager().getPlayer(event.getUser());
             if (player == null) return;
 
-            unloadChunk(player, unloadChunk.getChunkX(), unloadChunk.getChunkZ());
+            unloadChunk(event, player, unloadChunk.getChunkX(), unloadChunk.getChunkZ());
         }
 
         // 1.7 and 1.8 only
@@ -106,6 +108,7 @@ public class BasePacketWorldReader extends PacketListenerAbstract {
     }
 
     public void addChunkToCache(PacketSendEvent event, PlayerData player, BaseChunk[] chunks, boolean isGroundUp, int chunkX, int chunkZ) {
+        BaseChunk[] sections = ChunkSectionPool.shareSections(CompensatedWorld.blockVersion, chunks);
         double chunkCenterX = (chunkX << 4) + 8;
         double chunkCenterZ = (chunkZ << 4) + 8;
         boolean shouldPostTrans = Math.abs(player.x - chunkCenterX) < 16 && Math.abs(player.z - chunkCenterZ) < 16;
@@ -121,7 +124,7 @@ public class BasePacketWorldReader extends PacketListenerAbstract {
             event.getTasksAfterSend().add(player::sendTransaction); // Player is in this unloaded chunk
         }
         if (isGroundUp) {
-            Column column = new Column(chunkX, chunkZ, chunks, player.lastTransactionSent.get());
+            Column column = new Column(chunkX, chunkZ, sections, player.lastTransactionSent.get());
             player.compensatedWorld.addToCache(column, chunkX, chunkZ);
         } else {
             player.latencyUtils.addRealTimeTask(player.lastTransactionSent.get(), () -> {
@@ -134,13 +137,12 @@ public class BasePacketWorldReader extends PacketListenerAbstract {
                     // LogUtil.warn("Invalid non-ground up continuous sent for empty chunk " + chunkX + " " + chunkZ + " for " + player.user.getProfile().getName() + "! This corrupts the player's empty chunk!");
                     return;
                 }
-                existingColumn.mergeChunks(chunks);
+                existingColumn.mergeChunks(sections);
             });
         }
     }
 
-    public void unloadChunk(PlayerData player, int x, int z) {
-        if (player == null) return;
+    protected void unloadChunk(PacketSendEvent event, PlayerData player, int x, int z) {
         player.compensatedWorld.removeChunkLater(x, z);
     }
 

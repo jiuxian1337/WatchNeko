@@ -5,6 +5,15 @@ import com.github.retrooper.packetevents.protocol.world.chunk.BaseChunk;
 
 public record Column(int x, int z, BaseChunk[] chunks, int transaction) {
 
+    public BaseChunk sectionForWrite(int index) {
+        BaseChunk section = chunks[index];
+        if (section instanceof SharedChunkSection shared) {
+            section = shared.copyForWrite();
+            chunks[index] = section;
+        }
+        return section;
+    }
+
     // This ability was removed in 1.17 because of the extended world height
     // Therefore, the size of the chunks are ALWAYS 16!
     public void mergeChunks(BaseChunk[] toMerge) {

@@ -45,7 +45,7 @@ import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientPl
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientPlayerDigging;
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientUseItem;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
-import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.ints.Int2ObjectAVLTreeMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectLinkedOpenHashMap;
@@ -67,7 +67,7 @@ public class CompensatedWorld {
     // Pair of the block position and the owning list TO the actual block
     // The owning list is so that this info can be removed when the final list is processed
     private final Long2ObjectOpenHashMap<BlockPrediction> originalServerBlocks = new Long2ObjectOpenHashMap<>();
-    private final Int2ObjectMap<List<Vector3i>> serverIsCurrentlyProcessingThesePredictions = new Int2ObjectOpenHashMap<>();
+    private final Int2ObjectMap<List<Vector3i>> serverIsCurrentlyProcessingThesePredictions = new Int2ObjectAVLTreeMap<>();
     private final Object2ObjectLinkedOpenHashMap<Pair<Vector3i, DiggingAction>, Vector3d> unackedActions = new Object2ObjectLinkedOpenHashMap<>();
     private final boolean noNegativeBlocks;
     public boolean isRaining = false;
@@ -303,7 +303,7 @@ public class CompensatedWorld {
                 // The method also gets called for the previous state before replacement
                 player.pointThreeEstimator.handleChangeBlock(x, y, z, previousState);
 
-                chunk.set(null, x & 0xF, offsetY & 0xF, z & 0xF, combinedID);
+                column.sectionForWrite(sectionIndex).set(blockVersion, x & 0xF, offsetY & 0xF, z & 0xF, combinedID);
 
                 // Handle stupidity such as fluids changing in idle ticks.
                 player.pointThreeEstimator.handleChangeBlock(x, y, z, newState);

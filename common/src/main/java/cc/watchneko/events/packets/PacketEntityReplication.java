@@ -474,7 +474,7 @@ public class PacketEntityReplication extends Check implements PacketCheck {
 
         int lastTrans = player.lastTransactionSent.get();
 
-        player.latencyUtils.addRealTimeTask(lastTrans, () -> {
+        player.latencyUtils.addRealTimeTaskWithNextTransaction(lastTrans, () -> {
             PacketEntity entity = player.compensatedEntities.getEntity(entityId);
             if (entity == null) return;
             if (entity instanceof PacketEntityTrackXRot xRotEntity && yaw != null) {
@@ -483,9 +483,7 @@ public class PacketEntityReplication extends Check implements PacketCheck {
             }
 
             entity.onFirstTransaction(isRelative, hasPos, deltaX, deltaY, deltaZ, player);
-        });
-
-        player.latencyUtils.addRealTimeTask(lastTrans + 1, () -> {
+        }, () -> {
             PacketEntity entity = player.compensatedEntities.getEntity(entityId);
             if (entity == null) return;
             entity.onSecondTransaction();
