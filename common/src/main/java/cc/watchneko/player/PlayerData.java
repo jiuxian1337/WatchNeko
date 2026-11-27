@@ -297,7 +297,7 @@ public class PlayerData implements GrimUser {
     private boolean ignoreDuplicatePacketRotation = false;
     @Getter
     @Setter
-    private boolean experimentalChecks = false;
+    private volatile boolean experimentalChecks = false;
     @Getter
     private boolean cancelDuplicatePacket = true;
     @Getter

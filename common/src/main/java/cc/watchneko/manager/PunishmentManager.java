@@ -6,6 +6,7 @@ import ac.grim.grimac.api.config.ConfigReloadable;
 import ac.grim.grimac.api.event.events.CommandExecuteEvent;
 import cc.watchneko.WatchNekoAPI;
 import cc.watchneko.checks.Check;
+import cc.watchneko.checks.CheckData;
 import cc.watchneko.events.packets.ProxyAlertMessenger;
 import cc.watchneko.platform.api.player.PlatformPlayer;
 import cc.watchneko.player.PlayerData;
@@ -49,9 +50,10 @@ public class PunishmentManager implements ConfigReloadable {
         clickCommand = config.getStringElse("alerts.click.command", "/watchneko spectate %player%");
         try {
             groups.clear();
+            Collection<AbstractCheck> allChecks = player.checkManager.allChecks.values();
 
             // To support reloading
-            for (AbstractCheck check : player.checkManager.allChecks.values()) {
+            for (AbstractCheck check : allChecks) {
                 check.setEnabled(false);
             }
 
@@ -63,29 +65,7 @@ public class PunishmentManager implements ConfigReloadable {
                 int removeViolationsAfter = (int) map.getOrDefault("remove-violations-after", 300);
 
                 List<ParsedCommand> parsed = new ArrayList<>();
-                List<AbstractCheck> checksList = new ArrayList<>();
-                List<AbstractCheck> excluded = new ArrayList<>();
-                for (String command : checks) {
-                    command = command.toLowerCase(Locale.ROOT);
-                    boolean exclude = false;
-                    if (command.startsWith("!")) {
-                        exclude = true;
-                        command = command.substring(1);
-                    }
-                    for (AbstractCheck check : player.checkManager.allChecks.values()) { // o(n) * o(n)?
-                        if (check.getCheckName() != null &&
-                                (check.getCheckName().toLowerCase(Locale.ROOT).contains(command)
-                                        || check.getAlternativeName().toLowerCase(Locale.ROOT).contains(command))) { // Some checks have equivalent names like AntiKB and AntiKnockback
-                            if (exclude) {
-                                excluded.add(check);
-                            } else {
-                                checksList.add(check);
-                                check.setEnabled(true);
-                            }
-                        }
-                    }
-                    for (AbstractCheck check : excluded) checksList.remove(check);
-                }
+                List<AbstractCheck> checksList = selectChecks(allChecks, checks);
 
                 for (String command : commands) {
                     String firstNum = command.substring(0, command.indexOf(":"));
@@ -99,10 +79,40 @@ public class PunishmentManager implements ConfigReloadable {
                 }
 
                 groups.add(new PunishGroup(checksList, parsed, removeViolationsAfter * 1000));
+                checksList.forEach(check -> check.setEnabled(true));
             }
         } catch (Exception e) {
             LogUtil.error("Error while loading punishments.yml! This is likely your fault!", e);
         }
+    }
+
+    static List<AbstractCheck> selectChecks(Collection<AbstractCheck> available, List<String> selectors) {
+        List<AbstractCheck> selected = new ArrayList<>();
+        Set<AbstractCheck> excluded = new HashSet<>();
+        for (String selector : selectors) {
+            boolean exclude = selector.startsWith("!");
+            String pattern = (exclude ? selector.substring(1) : selector).toLowerCase(Locale.ROOT);
+            for (AbstractCheck check : available) {
+                if (!matchesCheck(check, pattern, exclude)) continue;
+                if (exclude) excluded.add(check);
+                else selected.add(check);
+            }
+        }
+        selected.removeAll(excluded);
+        return selected;
+    }
+
+    private static boolean matchesCheck(AbstractCheck check, String pattern, boolean exclude) {
+        String name = check.getCheckName();
+        if (name == null) return false;
+        String alias = check.getAlternativeName();
+        CheckData data = check.getClass().getAnnotation(CheckData.class);
+        if (!exclude && data != null && data.requiresExactPunishmentMatch()) {
+            return name.equalsIgnoreCase(pattern)
+                    || (alias != null && !alias.equals("UNKNOWN") && alias.equalsIgnoreCase(pattern));
+        }
+        return name.toLowerCase(Locale.ROOT).contains(pattern)
+                || (alias != null && alias.toLowerCase(Locale.ROOT).contains(pattern));
     }
 
     private String replaceAlertPlaceholders(String original, int vl, Check check, String verboseReplacement) {

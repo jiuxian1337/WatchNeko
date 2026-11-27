@@ -22,4 +22,10 @@ public @interface CheckData {
 
     boolean experimental() default false;
 
+    /** Whether an experimental check is gated by the global experimental-checks feature. */
+    boolean requiresExperimentalChecks() default true;
+
+    /** Whether a punishment group must list the full check name or a declared alias to include this check. */
+    boolean requiresExactPunishmentMatch() default false;
+
 }

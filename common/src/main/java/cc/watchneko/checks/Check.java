@@ -10,10 +10,12 @@ import cc.watchneko.utils.math.Vector3dm;
 import com.github.retrooper.packetevents.protocol.packettype.PacketType;
 import com.github.retrooper.packetevents.protocol.packettype.PacketTypeCommon;
 import com.github.retrooper.packetevents.protocol.player.ClientVersion;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.Locale;
 import java.util.Objects;
 
 import static com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientPlayerFlying.isFlying;
@@ -35,9 +37,11 @@ public class Check extends GrimProcessor implements AbstractCheck {
     private String description;
 
     private boolean experimental;
+    @Getter(AccessLevel.NONE)
+    private final boolean requiresExperimentalChecks;
     private @Setter boolean isEnabled;
 
-    private boolean exemptPermission;
+    private volatile boolean exemptPermission;
     private boolean noSetbackPermission;
     private boolean noModifyPacketPermission;
     private long lastViolationTime;
@@ -46,6 +50,7 @@ public class Check extends GrimProcessor implements AbstractCheck {
         this.player = Objects.requireNonNull(player);
 
         final CheckData checkData = this.getClass().getAnnotation(CheckData.class);
+        requiresExperimentalChecks = checkData != null && checkData.experimental() && checkData.requiresExperimentalChecks();
         if (checkData != null) {
             this.checkName = checkData.name();
             this.configName = checkData.configName();
@@ -91,10 +96,16 @@ public class Check extends GrimProcessor implements AbstractCheck {
 
     public final void updatePermissions() {
         if (configName == null || player.platformPlayer == null) return;
-        final String id = configName.toLowerCase();
-        exemptPermission = player.platformPlayer.hasPermission("watchneko.exempt." + id);
-        noSetbackPermission = player.platformPlayer.hasPermission("watchneko.nosetback." + id);
-        noModifyPacketPermission = player.platformPlayer.hasPermission("watchneko.nomodifypacket." + id);
+        final String id = configName.toLowerCase(Locale.ROOT);
+        final String alias = alternativeName == null || alternativeName.equals("UNKNOWN") ? null : alternativeName.toLowerCase(Locale.ROOT);
+        exemptPermission = hasCheckPermission("watchneko.exempt.", id, alias);
+        noSetbackPermission = hasCheckPermission("watchneko.nosetback.", id, alias);
+        noModifyPacketPermission = hasCheckPermission("watchneko.nomodifypacket.", id, alias);
+    }
+
+    private boolean hasCheckPermission(String prefix, String id, String alias) {
+        return player.platformPlayer.hasPermission(prefix + id)
+                || (alias != null && player.platformPlayer.hasPermission(prefix + alias));
     }
 
     public final boolean flagAndAlert(String verbose) {
@@ -114,7 +125,7 @@ public class Check extends GrimProcessor implements AbstractCheck {
     }
 
     public final boolean flag(String verbose) {
-        if (player.disableGrim || (experimental && !player.isExperimentalChecks()) || exemptPermission)
+        if (player.disableGrim || (requiresExperimentalChecks && !player.isExperimentalChecks()) || exemptPermission)
             return false; // Avoid calling event if disabled
 
         FlagEvent event = new FlagEvent(player, this, verbose);
@@ -130,7 +141,7 @@ public class Check extends GrimProcessor implements AbstractCheck {
 
     public final boolean canSetback() {
 
-        if (player.disableGrim || (experimental && !player.isExperimentalChecks()) || exemptPermission)
+        if (player.disableGrim || (requiresExperimentalChecks && !player.isExperimentalChecks()) || exemptPermission)
             return false; // Avoid calling event if disabled
 
         return player.punishmentManager.handleViolation(this);

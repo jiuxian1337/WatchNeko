@@ -84,6 +84,7 @@ import com.github.retrooper.packetevents.event.PacketSendEvent;
 import com.google.common.collect.ClassToInstanceMap;
 import com.google.common.collect.ImmutableClassToInstanceMap;
 
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class CheckManager {
@@ -100,7 +101,6 @@ public class CheckManager {
     private final ClassToInstanceMap<PostPredictionCheck> postPredictionChecks;
     private final PlayerData player;
     private PacketEntityReplication packetEntityReplication = null;
-
     public CheckManager(PlayerData player) {
         this.player = player;
         packetChecks = new ImmutableClassToInstanceMap.Builder<PacketCheck>()
@@ -555,10 +555,14 @@ public class CheckManager {
 
         for (final AbstractCheck check : allChecks.values()) {
             if (check.getConfigName() == null) continue;
-            final String id = check.getConfigName().toLowerCase();
-            for (String permissionName : permissions) {
-                permissionName += id;
-                WatchNekoAPI.INSTANCE.getPermissionManager().registerPermission(permissionName, PermissionDefaultValue.FALSE);
+            final String id = check.getConfigName().toLowerCase(Locale.ROOT);
+            final String alternativeName = check.getAlternativeName();
+            for (String prefix : permissions) {
+                WatchNekoAPI.INSTANCE.getPermissionManager().registerPermission(prefix + id, PermissionDefaultValue.FALSE);
+                if (alternativeName != null && !alternativeName.equals("UNKNOWN") && !alternativeName.equalsIgnoreCase(id)) {
+                    WatchNekoAPI.INSTANCE.getPermissionManager().registerPermission(
+                            prefix + alternativeName.toLowerCase(Locale.ROOT), PermissionDefaultValue.FALSE);
+                }
             }
         }
     }
