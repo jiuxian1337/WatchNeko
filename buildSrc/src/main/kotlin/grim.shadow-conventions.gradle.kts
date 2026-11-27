@@ -6,7 +6,10 @@ plugins {
 }
 
 tasks.named<ShadowJar>("shadowJar") {
-    minimize()
+    minimize {
+        // Adventure loads platform serializers and data component converters at runtime.
+        exclude(dependency("net.kyori:.*:.*"))
+    }
     archiveFileName = "${rootProject.name}-${project.name}-${rootProject.version}.jar"
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 

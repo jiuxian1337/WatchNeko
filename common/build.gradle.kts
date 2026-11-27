@@ -9,6 +9,9 @@ repositories {
     if (BuildConfig.mavenLocalOverride) {
         mavenLocal()
     }
+    maven("https://repo.codemc.io/repository/maven-releases/") {
+        content { includeGroup("com.github.retrooper") }
+    }
     maven {
         name = "papermc"
         url = uri("https://repo.papermc.io/repository/maven-public/")
@@ -62,6 +65,7 @@ dependencies {
     compileOnly(libs.paper.api)
 
     testImplementation(libs.junit.jupiter)
+    testImplementation(libs.packetevents.api)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
 

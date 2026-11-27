@@ -3,6 +3,7 @@ package cc.watchneko.events.packets;
 import cc.watchneko.WatchNekoAPI;
 import cc.watchneko.platform.api.player.PlatformPlayer;
 import cc.watchneko.utils.anticheat.LogUtil;
+import cc.watchneko.utils.reflection.ViaVersionUtil;
 import com.github.retrooper.packetevents.event.*;
 import com.github.retrooper.packetevents.netty.channel.ChannelHelper;
 import com.github.retrooper.packetevents.protocol.ConnectionState;
@@ -38,6 +39,8 @@ public class PacketPlayerJoinQuit extends PacketListenerAbstract {
         // This will never throw a NPE because code is run in OnUserConnect -> onPacketSend -> OnUserLogin order
         // And the user will be added to the map before the getPlayer() method call
         @NonNull PlatformPlayer platformPlayer = WatchNekoAPI.INSTANCE.getPlatformPlayerFactory().getFromNativePlayerType(nativePlayerObject);
+        var trackedPlayer = WatchNekoAPI.INSTANCE.getPlayerDataManager().getPlayer(event.getUser());
+        if (trackedPlayer != null && ViaVersionUtil.isAvailable) ViaMovementInput.install(trackedPlayer);
 
         if (WatchNekoAPI.INSTANCE.getConfigManager().getConfig().getBooleanElse("debug-pipeline-on-join", false)) {
             LogUtil.info("Pipeline: " + ChannelHelper.pipelineHandlerNamesAsString(event.getUser().getChannel()));

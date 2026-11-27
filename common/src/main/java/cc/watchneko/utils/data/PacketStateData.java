@@ -7,6 +7,8 @@ import lombok.Getter;
 // This is to keep all the packet data out of the main player class
 // Helps clean up the player class and makes devs aware they are sync'd to the netty thread
 public class PacketStateData {
+    // True only while forwarding an inbound packet whose original movement input was already read.
+    public boolean preViaMovementInput;
     public boolean packetPlayerOnGround = false;
     public boolean lastPacketWasTeleport = false;
     public boolean cancelDuplicatePacket, lastPacketWasOnePointSeventeenDuplicate = false;

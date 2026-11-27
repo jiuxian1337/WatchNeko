@@ -13,6 +13,9 @@ repositories {
     if (BuildConfig.mavenLocalOverride) {
         mavenLocal()
     }
+    maven("https://repo.codemc.io/repository/maven-releases/") {
+        content { includeGroup("com.github.retrooper") }
+    }
     maven {
         name = "papermc"
         url = uri("https://repo.papermc.io/repository/maven-public/")
@@ -36,6 +39,11 @@ repositories {
 dependencies {
     compileOnly(libs.paper.api)
     compileOnly(libs.placeholderapi)
+    testImplementation(libs.paper.api)
+    testImplementation(libs.packetevents.api)
+    testImplementation(libs.junit.jupiter)
+    testImplementation("org.mockito:mockito-core:5.23.0")
+    testRuntimeOnly(libs.junit.platform.launcher)
 
     if (BuildConfig.shadePE) {
         implementation(libs.packetevents.spigot)
@@ -47,6 +55,10 @@ dependencies {
 
     implementation(project(":common"))
     shadow(project(":common"))
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 bukkit {

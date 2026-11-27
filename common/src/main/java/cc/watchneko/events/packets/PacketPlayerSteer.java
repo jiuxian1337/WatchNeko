@@ -25,15 +25,10 @@ public class PacketPlayerSteer extends PacketListenerAbstract {
     }
 
     @Override
-    public boolean isPreVia() {
-        return true;
-    }
-
-    @Override
     public void onPacketReceive(PacketReceiveEvent event) {
         if (event.getPacketType() == PacketType.Play.Client.STEER_VEHICLE) {
             PlayerData player = WatchNekoAPI.INSTANCE.getPlayerDataManager().getPlayer(event.getUser());
-            if (player == null) return;
+            if (player == null || player.packetStateData.preViaMovementInput) return;
 
             WrapperPlayClientSteerVehicle steer = new WrapperPlayClientSteerVehicle(event);
 
@@ -46,7 +41,7 @@ public class PacketPlayerSteer extends PacketListenerAbstract {
             this.tickPlayerWorld(player);
         } else if (event.getPacketType() == PacketType.Play.Client.PLAYER_INPUT) {
             PlayerData player = WatchNekoAPI.INSTANCE.getPlayerDataManager().getPlayer(event.getUser());
-            if (player == null) return;
+            if (player == null || player.packetStateData.preViaMovementInput) return;
 
             WrapperPlayClientPlayerInput input = new WrapperPlayClientPlayerInput(event);
             byte forward = 0;
@@ -82,7 +77,8 @@ public class PacketPlayerSteer extends PacketListenerAbstract {
             player.packetStateData.knownInput = new KnownInput(input.isForward(), input.isBackward(), input.isLeft(), input.isRight(), input.isJump(), input.isShift(), input.isSprint());
         } else if (event.getPacketType() == PacketType.Play.Client.PLAYER_ROTATION) {
             PlayerData player = WatchNekoAPI.INSTANCE.getPlayerDataManager().getPlayer(event.getUser());
-            if (player == null || !player.inVehicle() || player.getClientVersion().isOlderThan(ClientVersion.V_1_21_2))
+            if (player == null || player.packetStateData.preViaMovementInput
+                    || !player.inVehicle() || player.getClientVersion().isOlderThan(ClientVersion.V_1_21_2))
                 return;
 
             // player_input is not sent every tick, so we need to stick to this packet

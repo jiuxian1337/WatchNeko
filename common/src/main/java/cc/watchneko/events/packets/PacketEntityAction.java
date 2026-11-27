@@ -17,17 +17,12 @@ public class PacketEntityAction extends PacketListenerAbstract {
     }
 
     @Override
-    public boolean isPreVia() {
-        return true;
-    }
-
-    @Override
     public void onPacketReceive(PacketReceiveEvent event) {
         if (event.getPacketType() == PacketType.Play.Client.ENTITY_ACTION) {
             WrapperPlayClientEntityAction action = new WrapperPlayClientEntityAction(event);
             PlayerData player = WatchNekoAPI.INSTANCE.getPlayerDataManager().getPlayer(event.getUser());
 
-            if (player == null) return;
+            if (player == null || player.packetStateData.preViaMovementInput) return;
 
             switch (action.getAction()) {
                 case START_SPRINTING:

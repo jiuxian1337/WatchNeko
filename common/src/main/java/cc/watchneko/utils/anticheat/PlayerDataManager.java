@@ -3,8 +3,10 @@ package cc.watchneko.utils.anticheat;
 import ac.grim.grimac.api.event.events.GrimJoinEvent;
 import ac.grim.grimac.api.event.events.GrimQuitEvent;
 import cc.watchneko.WatchNekoAPI;
+import cc.watchneko.events.packets.ViaMovementInput;
 import cc.watchneko.player.PlayerData;
 import cc.watchneko.utils.reflection.GeyserUtil;
+import cc.watchneko.utils.reflection.ViaVersionUtil;
 import com.github.retrooper.packetevents.PacketEvents;
 import com.github.retrooper.packetevents.netty.channel.ChannelHelper;
 import com.github.retrooper.packetevents.protocol.player.User;
@@ -68,12 +70,15 @@ public class PlayerDataManager {
         if (shouldCheck(user)) {
             PlayerData player = new PlayerData(user);
             playerDataMap.put(user, player);
+            if (ViaVersionUtil.isAvailable) ViaMovementInput.install(player);
             WatchNekoAPI.INSTANCE.getEventBus().post(new GrimJoinEvent(player));
         }
     }
 
     public PlayerData remove(final @NonNull User user) {
-        return playerDataMap.remove(user);
+        PlayerData player = playerDataMap.remove(user);
+        if (player != null && ViaVersionUtil.isAvailable) ViaMovementInput.remove(player);
+        return player;
     }
 
     public void onDisconnect(User user) {

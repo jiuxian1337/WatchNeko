@@ -202,7 +202,10 @@ public class WatchNekoExternalAPI implements GrimAbstractAPI, ConfigReloadObserv
         variableReplacements.putIfAbsent("%h_sensitivity%", user -> ((int) Math.round(user.getHorizontalSensitivity() * 200)) + "");
         variableReplacements.putIfAbsent("%v_sensitivity%", user -> ((int) Math.round(user.getVerticalSensitivity() * 200)) + "");
         variableReplacements.putIfAbsent("%fast_math%", user -> !user.isVanillaMath() + "");
-        variableReplacements.putIfAbsent("%tps%", user -> String.format("%.2f", WatchNekoAPI.INSTANCE.getPlatformServer().getTPS()));
+        variableReplacements.putIfAbsent("%tps%", user -> {
+            double tps = WatchNekoAPI.INSTANCE.getPlatformServer().getTPS();
+            return Double.isFinite(tps) ? String.format("%.2f", tps) : "N/A";
+        });
         variableReplacements.putIfAbsent("%version%", GrimUser::getVersionName);
         // static variables
         staticReplacements.put("%prefix%", MessageUtil.translateAlternateColorCodes('&', WatchNekoAPI.INSTANCE.getConfigManager().getPrefix()));

@@ -186,7 +186,8 @@ public final class WatchNekoBukkitLoaderPlugin extends JavaPlugin implements Pla
                 ExecutionCoordinator.simpleCoordinator(),
                 senderFactory.get()
         );
-        if (manager.hasCapability(CloudBukkitCapabilities.NATIVE_BRIGADIER)) {
+        if (manager.hasCapability(CloudBukkitCapabilities.NATIVE_BRIGADIER)
+                && manager.hasCapability(CloudBukkitCapabilities.BRIGADIER)) {
             manager.registerBrigadier();
             CloudBrigadierManager<Sender, ?> cbm = manager.brigadierManager();
             Configurable<BrigadierSetting> settings = cbm.settings();
