@@ -155,6 +155,14 @@ ScaffoldD:
     cancelvl: 5
     cancel-for-ms: 500
 
+# 连续搭路时过短、过于一致的潜行时长。
+ScaffoldE:
+    cancelvl: 5
+
+# 实验性检查，按服务端确认的连续搭桥放置评分。
+ScaffoldF:
+    enabled: true
+
 # 使用模拟移动进行的NoSlow(使用物品时不会减速)检查
 # 对服务端自身的网络抖动做了容错，反复右键和副手也不会误判。
 NoSlowA:
@@ -239,6 +247,11 @@ Reach:
     # 禁用此功能仍会捕获作弊者，不会导致误报
     # 除非你是专注于 1.8 PvP 的服务器，否则不建议使用这个额外的数据包
     enable-post-packet: false
+
+# 可选 PvP 规则，结果写入服务端日志。
+# 检测挖掘和放置中的自动瞄准模式。
+Baritone:
+    enabled: true
 
 # 实验性 Crash 检查的限额。启用状态由 experimental-checks 控制。
 CrashJ:

@@ -5,6 +5,7 @@ import cc.watchneko.checks.impl.autoclicker.AutoclickerD;
 import cc.watchneko.checks.impl.breaking.FastBreak;
 import cc.watchneko.checks.impl.breaking.LegacyFastBreak;
 import cc.watchneko.checks.impl.packetorder.PacketOrderP;
+import cc.watchneko.checks.impl.scaffolding.ScaffoldF;
 import cc.watchneko.player.PlayerData;
 import cc.watchneko.utils.anticheat.update.*;
 import cc.watchneko.utils.blockplace.BlockPlaceResult;
@@ -554,6 +555,9 @@ public class CheckManagerListener extends PacketListenerAbstract {
             player.packetStateData.didSendMovementBeforeTickEnd = true;
         }
 
+        if (!event.isCancelled()) {
+            player.checkManager.getBaritone().onMovement(hasPosition, hasLook);
+        }
         player.packetStateData.horseInteractCausedForcedRotation = false;
     }
 
@@ -572,6 +576,9 @@ public class CheckManagerListener extends PacketListenerAbstract {
         final BlockBreak blockBreak = new BlockBreak(player, packet.getBlockPosition(), packet.getBlockFace(), packet.getBlockFaceId(), action, packet.getSequence(), player.compensatedWorld.getBlock(packet.getBlockPosition()));
 
         player.checkManager.onBlockBreak(blockBreak);
+        player.checkManager.getBaritone().onDig(blockBreak, !event.isCancelled() && !blockBreak.isCancelled()
+                && (action != DiggingAction.START_DIGGING || BREAKABLE.apply(blockBreak.block.getType())));
+
         AutoclickerD miningCadence = player.checkManager.getCheck(AutoclickerD.class);
         LegacyFastBreak legacyFastBreak = player.checkManager.getCheck(LegacyFastBreak.class);
         boolean recordCadence = miningCadence.isConfiguredEnabled();
@@ -819,6 +826,8 @@ public class CheckManagerListener extends PacketListenerAbstract {
                     }
 
                 } else { // Legit place
+                    player.checkManager.getBaritone().onPlaceRequest(blockPlace);
+                    player.checkManager.getCheck(ScaffoldF.class).onPlaceRequest(blockPlace);
                     player.placeUseItemPackets.add(new BlockPlaceSnapshot(packet, player.isSneaking));
                 }
             }

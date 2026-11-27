@@ -253,6 +253,10 @@ public final class ScaffoldB extends ScaffoldCheck {
         }
     }
 
+    boolean isBridgePlacement(BlockPlace place) {
+        return place.isBlock && isScaffoldPlacement(place, getPlacedFace(place));
+    }
+
     private boolean isScaffoldPlacement(BlockPlace place, BlockFace placedFace) {
         if (placedFace == null) {
             return false;

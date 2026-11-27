@@ -110,6 +110,7 @@ Punishments:
         remove-violations-after: 300
         checks:
             - "Scaffold"
+            - "!ScaffoldF"
         commands:
             - "1:1 [log]"
             - "5:5 [alert]"
@@ -162,7 +163,6 @@ Punishments:
         checks:
             - "Vehicle"
             - "Sprint"
-            - "Baritone"
             - "Elytra"
             - "Chat"
             - "Exploit"
@@ -198,10 +198,24 @@ Punishments:
         commands:
             - "1:1 [log]"
             - "1:1 [alert]"
+    ScaffoldF:
+        remove-violations-after: 300
+        checks:
+            - "ScaffoldF"
+        commands:
+            - "1:1 [log]"
+            - "1:1 [alert]"
     AimX:
         remove-violations-after: 300
         checks:
             - "AimX"
+        commands:
+            - "1:1 [log]"
+            - "1:1 [alert]"
+    Baritone:
+        remove-violations-after: 300
+        checks:
+            - "Baritone"
         commands:
             - "1:1 [log]"
             - "1:1 [alert]"

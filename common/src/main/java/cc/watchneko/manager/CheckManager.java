@@ -26,6 +26,7 @@ import cc.watchneko.checks.impl.analysis.AnalysisM;
 import cc.watchneko.checks.impl.analysis.AnalysisN;
 import cc.watchneko.checks.impl.analysis.AnalysisO;
 import cc.watchneko.checks.impl.badpackets.*;
+import cc.watchneko.checks.impl.baritone.Baritone;
 import cc.watchneko.checks.impl.breaking.*;
 import cc.watchneko.checks.impl.chat.ChatA;
 import cc.watchneko.checks.impl.chat.ChatB;
@@ -309,6 +310,7 @@ public class CheckManager {
                 .put(ScaffoldB.class, new ScaffoldB(player))
                 .put(ScaffoldC.class, new ScaffoldC(player))
                 .put(ScaffoldD.class, new ScaffoldD(player))
+                .put(ScaffoldE.class, new ScaffoldE(player))
                 .put(ScaffoldProcessor.class, new ScaffoldProcessor(player))
                 .put(PacketOrderN.class, new PacketOrderN(player))
                 .put(DuplicateRotPlace.class, new DuplicateRotPlace(player))
@@ -360,7 +362,9 @@ public class CheckManager {
                 .put(TransactionOrder.class, new TransactionOrder(player))
                 .put(VehicleC.class, new VehicleC(player))
                 .put(Hitboxes.class, new Hitboxes(player)) // Hitboxes is invoked by Reach
+                .put(Baritone.class, new Baritone(player))
                 .put(ChestStealer.class, new ChestStealer(player))
+                .put(ScaffoldF.class, new ScaffoldF(player))
                 // The two basic-heuristic scores are flagged by AnalysisB, which owns the sample window.
                 .put(AnalysisC.class, new AnalysisC(player))
                 .put(AnalysisD.class, new AnalysisD(player))
@@ -390,6 +394,10 @@ public class CheckManager {
     @SuppressWarnings("unchecked")
     public <T extends AbstractCheck> T getCheck(Class<T> check) {
         return (T) allChecks.get(check);
+    }
+
+    public Baritone getBaritone() {
+        return getCheck(Baritone.class);
     }
 
     @SuppressWarnings("unchecked")

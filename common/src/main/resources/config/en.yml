@@ -149,6 +149,14 @@ ScaffoldD:
     cancelvl: 5
     cancel-for-ms: 500
 
+# Short, consistent sneaks while bridging.
+ScaffoldE:
+    cancelvl: 5
+
+# Experimental score for rapid chains of confirmed bridging placements.
+ScaffoldF:
+    enabled: true
+
 # Prediction-based no slow check
 # Tolerant of the server's own netcode quirks, so it stays quiet while you spam right click and offhand.
 NoSlowA:
@@ -234,6 +242,11 @@ Reach:
     # Leaving this disabled will still catch cheaters and will not cause false positives
     # Unless you are a 1.8 PvP focused server, this additional packet is not recommended
     enable-post-packet: false
+
+# Optional PvP policy. Results appear in the server log.
+# Detects repeated automated mining and placement aim patterns.
+Baritone:
+    enabled: true
 
 # Limits for the experimental Crash checks. Activation follows experimental-checks.
 CrashJ:
