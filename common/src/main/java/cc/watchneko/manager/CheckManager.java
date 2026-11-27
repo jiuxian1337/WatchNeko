@@ -105,6 +105,7 @@ public class CheckManager {
         this.player = player;
         packetChecks = new ImmutableClassToInstanceMap.Builder<PacketCheck>()
                 .put(PacketOrderProcessor.class, player.packetOrderProcessor)
+                .put(AutoTotem.class, new AutoTotem(player))
                 .put(Reach.class, new Reach(player))
                 .put(ExploitC.class, new ExploitC(player)) // 必须前置这个检查
                 .put(InteractB.class, new InteractB(player))
@@ -121,6 +122,7 @@ public class CheckManager {
                 .put(InventoryE.class, new InventoryE(player))
                 .put(InventoryF.class, new InventoryF(player))
                 .put(InventoryG.class, new InventoryG(player))
+                .put(PacketOrderP.class, new PacketOrderP(player))
                 .put(PacketEntityReplication.class, new PacketEntityReplication(player))
                 .put(PacketChangeGameState.class, new PacketChangeGameState(player))
                 .put(CompensatedInventory.class, player.inventory)
@@ -324,6 +326,7 @@ public class CheckManager {
                 .put(TransactionOrder.class, new TransactionOrder(player))
                 .put(VehicleC.class, new VehicleC(player))
                 .put(Hitboxes.class, new Hitboxes(player)) // Hitboxes is invoked by Reach
+                .put(ChestStealer.class, new ChestStealer(player))
                 // The two basic-heuristic scores are flagged by AnalysisB, which owns the sample window.
                 .put(AnalysisC.class, new AnalysisC(player))
                 .put(AnalysisD.class, new AnalysisD(player))

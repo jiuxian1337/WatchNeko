@@ -20,7 +20,7 @@ public class InventoryE extends InventoryCheck {
         super.onPacketReceive(event);
 
         if (event.getPacketType() == PacketType.Play.Client.HELD_ITEM_CHANGE) {
-            if (player.hasInventoryOpen) {
+            if (player.openWindow.mustBeOpen()) {
                 if (this.lastTransaction < player.lastTransactionReceived.get()
                         && flagAndAlert()) {
                     if (shouldModifyPackets()) {
@@ -32,7 +32,7 @@ public class InventoryE extends InventoryCheck {
                         closeInventory();
                     }
                 }
-            } else {
+            } else if (player.openWindow.mustBeClosed()) {
                 reward();
             }
         }

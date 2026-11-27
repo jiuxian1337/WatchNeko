@@ -262,6 +262,19 @@ AutoclickerA:
     entropy-jiff-min: 0.04
     entropy-jiff-max: 0.06
 
+# 实验性图腾补充检测，需开启 experimental-checks。
+AutoTotem:
+    enabled: true
+    sample-size: 8
+    rapid-pairs: 4
+    rapid-gap-ms: 5
+    max-replenish-ms: 1500
+    max-deviation-ms: 15
+
+# 实验性检查，检测反复快速取物并随即关闭容器。
+ChestStealer:
+    enabled: true
+
 AimG:
     # 在存在有效水平转动时，检测连续下压式的极小 pitch 平滑。
     max-streak: 12

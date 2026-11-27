@@ -171,6 +171,20 @@ Punishments:
             - "5:5 [webhook]"
             - "5:5 [proxy]"
             - "25:0 kick %player% cheating"
+    AutoTotem:
+        remove-violations-after: 300
+        checks:
+            - "AutoTotem"
+        commands:
+            - "1:1 [log]"
+            - "1:1 [alert]"
+    ChestStealer:
+        remove-violations-after: 300
+        checks:
+            - "ChestStealer"
+        commands:
+            - "1:1 [log]"
+            - "1:1 [alert]"
     Interact:
         remove-violations-after: 300
         checks:

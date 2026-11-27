@@ -13,7 +13,7 @@ public class InventoryC extends InventoryCheck {
     }
 
     public void onBlockPlace(final BlockPlace place) {
-        if (player.hasInventoryOpen) {
+        if (player.openWindow.mustBeOpen()) {
             if (flagAndAlert()) {
                 if (shouldModifyPackets()) {
                     place.resync();
@@ -22,7 +22,7 @@ public class InventoryC extends InventoryCheck {
                     closeInventory();
                 }
             }
-        } else {
+        } else if (player.openWindow.mustBeClosed()) {
             reward();
         }
     }

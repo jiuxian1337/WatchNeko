@@ -28,11 +28,11 @@ public class InventoryG extends InventoryCheck {
                 return;
             }
 
-            if (player.hasInventoryOpen) {
+            if (player.openWindow.mustBeOpen()) {
                 if (flagAndAlert() && !isNoSetbackPermission()) {
                     closeInventory();
                 }
-            } else {
+            } else if (player.openWindow.mustBeClosed()) {
                 reward();
             }
         }

@@ -29,7 +29,7 @@ public class InventoryD extends InventoryCheck {
             return;
         }
 
-        if (player.hasInventoryOpen) {
+        if (player.openWindow.mustBeOpen()) {
             boolean inVehicle = player.inVehicle();
             boolean isJumping, isMoving;
 

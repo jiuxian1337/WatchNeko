@@ -1,6 +1,7 @@
 package cc.watchneko.events.packets;
 
 import cc.watchneko.WatchNekoAPI;
+import cc.watchneko.checks.impl.packetorder.PacketOrderP;
 import cc.watchneko.player.PlayerData;
 import cc.watchneko.utils.anticheat.update.*;
 import cc.watchneko.utils.blockplace.BlockPlaceResult;
@@ -628,6 +629,7 @@ public class CheckManagerListener extends PacketListenerAbstract {
         // 被撤销的c03不应该再进入模拟
         if (event.isCancelled()
                 && WrapperPlayClientPlayerFlying.isFlying(event.getPacketType())) {
+            player.checkManager.getCheck(PacketOrderP.class).onUncertainTick();
             return;
         }
 
@@ -695,6 +697,9 @@ public class CheckManagerListener extends PacketListenerAbstract {
         // The player flagged crasher or timer checks, therefore we must protect predictions against these attacks
         if (event.isCancelled() && (WrapperPlayClientPlayerFlying.isFlying(event.getPacketType()) || event.getPacketType() == PacketType.Play.Client.VEHICLE_MOVE)) {
             player.packetStateData.cancelDuplicatePacket = false;
+            player.checkManager.getCheck(PacketOrderP.class).onUncertainTick();
+            player.packetStateData.lastPacketWasOnePointSeventeenDuplicate = false;
+            player.packetStateData.lastPacketWasTeleport = false;
             return;
         }
 
@@ -813,18 +818,22 @@ public class CheckManagerListener extends PacketListenerAbstract {
         }
 
         if (event.getPacketType() == PacketType.Play.Client.CLIENT_TICK_END) {
-            player.serverOpenedInventoryThisTick = false;
-            if (!player.packetStateData.didSendMovementBeforeTickEnd) {
-                // The player didn't send a movement packet, so we can predict this like we had idle tick on 1.8
-                player.packetStateData.didLastLastMovementIncludePosition = player.packetStateData.didLastMovementIncludePosition;
-                player.packetStateData.didLastMovementIncludePosition = false;
-            }
-            player.packetStateData.didSendMovementBeforeTickEnd = false;
+            resetAfterTickEnd(player);
         }
 
         // Finally, remove the packet state variables on this packet
         player.packetStateData.lastPacketWasOnePointSeventeenDuplicate = false;
         player.packetStateData.lastPacketWasTeleport = false;
+    }
+
+    private static void resetAfterTickEnd(PlayerData player) {
+        player.checkManager.getCheck(PacketOrderP.class).onClientTickEnd();
+        player.serverOpenedInventoryThisTick = false;
+        if (!player.packetStateData.didSendMovementBeforeTickEnd) {
+            player.packetStateData.didLastLastMovementIncludePosition = player.packetStateData.didLastMovementIncludePosition;
+            player.packetStateData.didLastMovementIncludePosition = false;
+        }
+        player.packetStateData.didSendMovementBeforeTickEnd = false;
     }
 
     @Override

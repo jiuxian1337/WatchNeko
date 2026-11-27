@@ -22,7 +22,7 @@ public class InventoryA extends InventoryCheck {
             WrapperPlayClientInteractEntity wrapper = new WrapperPlayClientInteractEntity(event);
             if (wrapper.getAction() != InteractAction.ATTACK) return;
 
-            if (player.hasInventoryOpen) {
+            if (player.openWindow.mustBeOpen()) {
                 if (flagAndAlert()) {
                     if (shouldModifyPackets()) {
                         event.setCancelled(true);
@@ -31,7 +31,7 @@ public class InventoryA extends InventoryCheck {
                     if (!isNoSetbackPermission())
                         closeInventory();
                 }
-            } else {
+            } else if (player.openWindow.mustBeClosed()) {
                 reward();
             }
         }

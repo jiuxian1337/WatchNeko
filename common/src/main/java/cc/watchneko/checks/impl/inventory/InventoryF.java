@@ -24,7 +24,7 @@ public class InventoryF extends InventoryCheck {
         super.onPacketReceive(event);
 
         if (event.getPacketType() == PacketType.Play.Client.CLICK_WINDOW) {
-            if (!player.hasInventoryOpen && "NOT_DESYNCED".equals(player.inventoryDesyncStatus)) {
+            if (player.openWindow.mustBeClosed()) {
                 if (flagAndAlert()) {
                     if (shouldModifyPackets()) {
                         event.setCancelled(true);
@@ -34,7 +34,7 @@ public class InventoryF extends InventoryCheck {
                         closeInventory();
                     }
                 }
-            } else {
+            } else if (player.openWindow.mustBeOpen()) {
                 reward();
             }
         }

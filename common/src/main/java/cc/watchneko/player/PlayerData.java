@@ -120,6 +120,7 @@ public class PlayerData implements GrimUser {
     public final CompensatedWorld compensatedWorld;
     public final CompensatedEntities compensatedEntities;
     public final CompensatedInventory inventory;
+    public final CompensatedOpenWindow openWindow = new CompensatedOpenWindow();
     public final LatencyUtils latencyUtils = new LatencyUtils(this);
     public final PointThreeEstimator pointThreeEstimator;
     public final TrigHandler trigHandler = new TrigHandler(this);
@@ -266,9 +267,6 @@ public class PlayerData implements GrimUser {
      */
     public final RotationSequence rotationSequence = new RotationSequence();
     public boolean serverOpenedInventoryThisTick;
-    public boolean hasInventoryOpen;
-    public long lastInventoryOpen;
-    public String inventoryDesyncStatus = "NOT_DESYNCED";
     // end config
     public boolean noModifyPacketPermission = false;
     public boolean noSetbackPermission = false;

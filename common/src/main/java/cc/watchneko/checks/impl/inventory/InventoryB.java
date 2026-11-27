@@ -16,7 +16,7 @@ public class InventoryB extends InventoryCheck {
     public void handle(PacketReceiveEvent event, WrapperPlayClientPlayerDigging wrapper) {
         if (wrapper.getAction() != DiggingAction.START_DIGGING) return;
 
-        if (player.hasInventoryOpen) {
+        if (player.openWindow.mustBeOpen()) {
             if (flagAndAlert()) {
                 if (shouldModifyPackets()) {
                     event.setCancelled(true);
@@ -26,7 +26,7 @@ public class InventoryB extends InventoryCheck {
                     closeInventory();
                 }
             }
-        } else {
+        } else if (player.openWindow.mustBeClosed()) {
             reward();
         }
     }

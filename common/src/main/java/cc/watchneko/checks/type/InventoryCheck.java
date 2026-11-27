@@ -1,5 +1,6 @@
 package cc.watchneko.checks.type;
 
+import cc.watchneko.checks.impl.packetorder.PacketOrderP;
 import cc.watchneko.player.PlayerData;
 import com.github.retrooper.packetevents.PacketEvents;
 import com.github.retrooper.packetevents.event.PacketReceiveEvent;
@@ -39,20 +40,27 @@ public class InventoryCheck extends BlockPlaceCheck implements PacketCheck {
         }
 
         int windowId = player.inventory.getOpenWindowID();
+        PacketOrderP packetOrder = player.checkManager.getCheck(PacketOrderP.class);
+        packetOrder.beginInventoryMitigation();
+        try {
+            player.user.writePacket(new WrapperPlayServerCloseWindow(windowId));
+            PacketEvents.getAPI().getProtocolManager().receivePacket(
+                    player.user.getChannel(), new WrapperPlayClientCloseWindow(windowId)
+            );
 
-        player.user.writePacket(new WrapperPlayServerCloseWindow(windowId));
-        PacketEvents.getAPI().getProtocolManager().receivePacket(
-                player.user.getChannel(), new WrapperPlayClientCloseWindow(windowId)
-        );
-
-        player.sendTransaction();
-        int transaction = player.lastTransactionSent.get();
-        closeTransaction = transaction;
-        player.latencyUtils.addRealTimeTask(transaction, () -> {
-            if (closeTransaction == transaction) {
-                closeTransaction = NONE;
-            }
-        });
+            player.sendTransaction();
+            int transaction = player.lastTransactionSent.get();
+            closeTransaction = transaction;
+            player.latencyUtils.addRealTimeTask(transaction, () -> {
+                if (closeTransaction == transaction) {
+                    closeTransaction = NONE;
+                }
+                packetOrder.endInventoryMitigation();
+            });
+        } catch (RuntimeException | Error exception) {
+            packetOrder.endInventoryMitigation();
+            throw exception;
+        }
 
         ((Channel) player.user.getChannel()).flush();
     }

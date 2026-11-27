@@ -257,6 +257,19 @@ AutoclickerA:
     entropy-jiff-min: 0.04
     entropy-jiff-max: 0.06
 
+# Experimental totem replenishment patterns. Requires experimental-checks.
+AutoTotem:
+    enabled: true
+    sample-size: 8
+    rapid-pairs: 4
+    rapid-gap-ms: 5
+    max-replenish-ms: 1500
+    max-deviation-ms: 15
+
+# Experimental check for repeated rapid storage transfers followed by quick closes.
+ChestStealer:
+    enabled: true
+
 AimG:
     # Consecutive descending micro-pitch pattern after meaningful yaw movement.
     max-streak: 12
