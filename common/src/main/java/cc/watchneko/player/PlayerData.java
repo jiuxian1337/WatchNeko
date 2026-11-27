@@ -1042,6 +1042,7 @@ public class PlayerData implements GrimUser {
         for (AbstractCheck value : checkManager.allChecks.values()) value.reload();
         // reload punishment manager
         punishmentManager.reload(config);
+        checkManager.getXRay().reset();
     }
 
     @Override

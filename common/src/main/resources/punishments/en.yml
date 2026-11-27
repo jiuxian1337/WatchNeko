@@ -219,6 +219,27 @@ Punishments:
         commands:
             - "1:1 [log]"
             - "1:1 [alert]"
+    XRayA:
+        remove-violations-after: 300
+        checks:
+            - "XRayA"
+        commands:
+            - "1:1 [log]"
+            - "1:1 [alert]"
+    XRayB:
+        remove-violations-after: 300
+        checks:
+            - "XRayB"
+        commands:
+            - "1:1 [log]"
+            - "1:1 [alert]"
+    XRayC:
+        remove-violations-after: 300
+        checks:
+            - "XRayC"
+        commands:
+            - "1:1 [log]"
+            - "1:1 [alert]"
     Interact:
         remove-violations-after: 300
         checks:

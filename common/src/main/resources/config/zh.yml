@@ -253,6 +253,71 @@ Reach:
 Baritone:
     enabled: true
 
+# XRayA、XRayB 和 XRayC 共用的矿物列表。每项的 blocks 留空时继承 XRay.blocks。
+XRay:
+    blocks:
+        - DIAMOND_ORE
+        - DEEPSLATE_DIAMOND_ORE
+        - ANCIENT_DEBRIS
+
+XRayA:
+    enabled: true
+    blocks: []
+    retention-seconds: 600
+    match-radius: 1
+    suspicious-rate: 0.1
+    penalty-multiplier: 2.0
+    min-samples: 8
+    min-hits: 2
+    buffer: 2.0
+    environment:
+        radius: 3
+        air-count: 14
+        cave-air-multiplier: 5
+        water-count: 14
+        lava-count: 14
+
+XRayB:
+    enabled: true
+    blocks: []
+    path-max-blocks: 500
+    cleanup-after-minutes: 15
+    min-path-blocks: 10
+    turning-limit: 10
+    branching-limit: 6
+    y-shift-limit: 4
+    y-shift-min: 3
+    buffer: 2.0
+    environment:
+        radius: 3
+        air-count: 14
+        cave-air-multiplier: 5
+        water-count: 14
+        lava-count: 14
+    fake-cave-detection:
+        enabled: true
+        min-blocks: 10
+        radius: 1
+        sample-limit: 20
+        air-ratio: 0.3
+        max-triggers: 5
+        reset-minutes: 20
+
+XRayC:
+    enabled: true
+    blocks: []
+    distance: 5
+    small-size: 4
+    trigger-count: 3
+    max-scan-blocks: 96
+    buffer: 1.0
+    environment:
+        radius: 3
+        air-count: 14
+        cave-air-multiplier: 5
+        water-count: 14
+        lava-count: 14
+
 # 实验性 Crash 检查的限额。启用状态由 experimental-checks 控制。
 CrashJ:
     max-edit-bytes: 98304
@@ -593,4 +658,4 @@ history:
 
 
 # 不要修改这一行：插件启动时会把这里写成当前版本的编号。
-config-version: 11
+config-version: 12

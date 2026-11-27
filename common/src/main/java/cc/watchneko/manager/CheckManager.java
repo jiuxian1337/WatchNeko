@@ -27,6 +27,10 @@ import cc.watchneko.checks.impl.analysis.AnalysisN;
 import cc.watchneko.checks.impl.analysis.AnalysisO;
 import cc.watchneko.checks.impl.badpackets.*;
 import cc.watchneko.checks.impl.baritone.Baritone;
+import cc.watchneko.checks.impl.xray.XRayA;
+import cc.watchneko.checks.impl.xray.XRayB;
+import cc.watchneko.checks.impl.xray.XRayC;
+import cc.watchneko.checks.impl.xray.XRayProcessor;
 import cc.watchneko.checks.impl.breaking.*;
 import cc.watchneko.checks.impl.chat.ChatA;
 import cc.watchneko.checks.impl.chat.ChatB;
@@ -111,6 +115,9 @@ public class CheckManager {
     private final PlayerData player;
     private PacketEntityReplication packetEntityReplication = null;
     private PacketReceiveEvent rejectedByExperimentalCrash;
+
+    private final XRayProcessor xRay;
+
     public CheckManager(PlayerData player) {
         this.player = player;
         packetChecks = new ImmutableClassToInstanceMap.Builder<PacketCheck>()
@@ -365,6 +372,9 @@ public class CheckManager {
                 .put(Baritone.class, new Baritone(player))
                 .put(ChestStealer.class, new ChestStealer(player))
                 .put(ScaffoldF.class, new ScaffoldF(player))
+                .put(XRayA.class, new XRayA(player))
+                .put(XRayB.class, new XRayB(player))
+                .put(XRayC.class, new XRayC(player))
                 // The two basic-heuristic scores are flagged by AnalysisB, which owns the sample window.
                 .put(AnalysisC.class, new AnalysisC(player))
                 .put(AnalysisD.class, new AnalysisD(player))
@@ -388,6 +398,7 @@ public class CheckManager {
                 .putAll(noneModules)
                 .build();
 
+        xRay = new XRayProcessor(player, getCheck(XRayA.class), getCheck(XRayB.class), getCheck(XRayC.class));
         init();
     }
 
@@ -398,6 +409,10 @@ public class CheckManager {
 
     public Baritone getBaritone() {
         return getCheck(Baritone.class);
+    }
+
+    public XRayProcessor getXRay() {
+        return xRay;
     }
 
     @SuppressWarnings("unchecked")

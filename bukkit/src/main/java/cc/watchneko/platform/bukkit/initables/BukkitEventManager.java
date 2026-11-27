@@ -9,6 +9,7 @@ import cc.watchneko.platform.bukkit.events.AutoTotemListener;
 import cc.watchneko.platform.bukkit.events.ChestStealerListener;
 import cc.watchneko.platform.bukkit.events.DamageMitigationEvent;
 import cc.watchneko.platform.bukkit.events.PistonEvent;
+import cc.watchneko.platform.bukkit.events.XRayListener;
 import cc.watchneko.player.PlayerData;
 import cc.watchneko.utils.anticheat.LogUtil;
 import com.github.retrooper.packetevents.PacketEvents;
@@ -31,6 +32,7 @@ public class BukkitEventManager implements StartableInitable, Listener {
         Bukkit.getPluginManager().registerEvents(new PistonEvent(), WatchNekoBukkitLoaderPlugin.LOADER);
         Bukkit.getPluginManager().registerEvents(new DamageMitigationEvent(), WatchNekoBukkitLoaderPlugin.LOADER);
         Bukkit.getPluginManager().registerEvents(this, WatchNekoBukkitLoaderPlugin.LOADER);
+        Bukkit.getPluginManager().registerEvents(new XRayListener(), WatchNekoBukkitLoaderPlugin.LOADER);
         Bukkit.getPluginManager().registerEvents(new ChestStealerListener(), WatchNekoBukkitLoaderPlugin.LOADER);
         if (PacketEvents.getAPI().getServerManager().getVersion().isNewerThanOrEquals(ServerVersion.V_1_11)) {
             Bukkit.getPluginManager().registerEvents(new AutoTotemListener(), WatchNekoBukkitLoaderPlugin.LOADER);

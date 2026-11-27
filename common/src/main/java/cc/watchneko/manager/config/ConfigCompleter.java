@@ -168,7 +168,30 @@ final class ConfigCompleter {
         final List<Node> roots = parse(lines);
         final List<String> migrated = new ArrayList<>(lines);
         renameSection(roots, migrated, updated, "AutoclickerF", "AutoclickerB");
+
+        // The previous layout used XRayA only for the shared block list.
+        final Node sharedOres = find(roots, "XRayA");
+        final boolean hasLegacyXRay = find(roots, "XRayD") != null || find(roots, "XRayE") != null || find(roots, "XRayF") != null;
+        if (hasLegacyXRay && sharedOres != null && find(roots, "XRay") == null
+                && find(roots, "XRayB") == null && find(roots, "XRayC") == null && hasOnlySharedOreList(lines)
+                && renameSection(roots, migrated, updated, "XRayA", "XRay")) {
+            roots.remove(sharedOres);
+        }
+        renameSection(roots, migrated, updated, "XRayD", "XRayA");
+        renameSection(roots, migrated, updated, "XRayE", "XRayB");
+        renameSection(roots, migrated, updated, "XRayF", "XRayC");
         return migrated;
+    }
+
+    private static boolean hasOnlySharedOreList(final List<String> lines) {
+        // A flow mapping can hold the shared list without child lines in the text parser.
+        try {
+            return loadYaml(String.join("\n", lines)) instanceof Map<?, ?> config
+                    && config.get("XRayA") instanceof Map<?, ?> shared
+                    && shared.size() == 1 && shared.containsKey("blocks");
+        } catch (RuntimeException ignored) {
+            return false;
+        }
     }
 
     private static boolean renameSection(final List<Node> roots, final List<String> lines, final List<String> updated,

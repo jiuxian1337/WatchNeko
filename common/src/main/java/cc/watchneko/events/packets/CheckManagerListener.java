@@ -594,6 +594,13 @@ public class CheckManagerListener extends PacketListenerAbstract {
             });
         }
 
+        var xRaySettings = WatchNekoAPI.INSTANCE.getConfigManager().getXRaySettings();
+        if (xRaySettings != null && xRaySettings.enabled()) {
+            long receivedAt = System.nanoTime();
+            event.getPostTasks().add(() -> player.checkManager.getXRay().onDig(xRaySettings, blockBreak.position, action,
+                    !event.isCancelled() && !blockBreak.isCancelled(), receivedAt));
+        }
+
         if (blockBreak.isCancelled()) {
             event.setCancelled(true);
             player.onPacketCancel();
