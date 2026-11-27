@@ -6,7 +6,7 @@
 
 改完之后输入 `/watchneko reload` 生效（**数据库设置除外**，那个必须重启服务器）。
 
-> ⚠️ **升级插件后，新增的配置项会自动补进你已有的 `config.yml`。** 插件启动时（以及 `/watchneko reload` 时）会把新版默认文件里有、你文件里没有的键**连同注释**插进去，已有内容一行都不会改。
+> ⚠️ **升级插件后，新增的配置项会自动补进你已有的 `config.yml`。** 插件启动时和运行 `/watchneko reload` 时，会连同注释补齐缺失项，并保留已有配置值。
 >
 > - 补之前会先备份成 `config.yml.bak`（`messages.yml` / `discord.yml` 同理）。
 > - 只补缺失的键，不会覆盖你改过的值，也不会删任何东西。
@@ -309,6 +309,13 @@ mitigate-damage:
 **这是整个插件最核心的检测**，判断玩家移动是否违反游戏物理。抓 Fly、Speed、Step 等。
 
 ```yaml
+movement:
+    engine: unified
+```
+
+`movement.engine` 默认使用 `unified`。统一引擎按客户端确认推进虚拟世界，并使用版本化方块碰撞盒和实体位置候选。设为 `legacy` 可切回旧引擎。运行 `/watchneko reload` 后，新连接采用新设置。已连接的玩家重新加入后切换引擎。可以用 `/watchneko perf` 查看每个引擎的连接数。
+
+```yaml
 Simulation:
     setback-decay-multiplier: 0.999
     threshold: 0.03
@@ -465,6 +472,19 @@ NoSlowA:
 | `setbackvl` | 违规多少次拉回。`0` = 不拉回 |
 | `decay` | 玩家正常使用物品并被减速时，违规值衰减多少 |
 
+### `NoSlowC` — 物品减速双候选
+
+实验检查。将 `experimental-checks` 和 `NoSlowC.enabled` 都设为 `true` 后启用。它用同一帧的移动预测分别验证减速和未减速两组候选。两组证据都须在同一段物品使用期间出现。达到补算上限的未决帧不计证据。
+
+默认处罚配置通过 `NoSlow` 组匹配此检查。自定义组仅列出特定检查名时，可把 `NoSlowC` 加入对应组。
+
+| 设置 | 默认值 | 说明 |
+|---|---:|---|
+| `fit-distance` | 0.003 | 候选可拟合位移的最大残差，单位为方块。 |
+| `reject-distance` | 0.012 | 排除整组候选的残差下限，须大于 `fit-distance`。 |
+| `required-unslowed-ticks` | 4 | 同一物品使用段内需要的纯未减速证据帧数。 |
+| `max-additional-candidates` | 64 | 每个移动帧在主预测之外最多计算的碰撞候选数。 |
+
 ### `VelocityA` / `VelocityB` — 击退
 
 检测「被打不后退」外挂（AntiKnockback）。
@@ -543,6 +563,56 @@ Reach:
 
 > 关于 `threshold: 0.03`：1.9–1.18.1（不含 1.18.2）或某些客户端/服务器组合存在 **0.03 的距离增加**，这是协议变更导致的。这个检查在 **1.8 服务器上的 1.7/1.8 客户端**效果最好。
 
+### `Baritone` — 挖掘与放置瞄准
+
+`Baritone.enabled` 默认为 `true`。检测观察挖掘前的精确转向和持续瞄准、已确认放置前的转向，以及同一个挖掘段内保持固定俯仰角的行为。四种行为共用 `Baritone` 的违规计数，详细告警包含触发的模式。
+
+随包的 `Baritone` 组只记录和告警。已有服务器使用当前 `punishments.yml` 中匹配 `Baritone` 的规则。
+
+### `XRayA`、`XRayB`、`XRayC` — 矿脉发现行为
+
+三项默认开启。将对应检查的 `.enabled` 设为 `false` 可关闭。每项的 `blocks` 留空时继承 `XRay.blocks`，默认观测钻石矿、深层钻石矿和远古残骸。
+
+| 检测 | 判定 |
+|---|---|
+| `XRayA` | 统计独立矿脉的爆炸露矿命中率。同一爆炸在一个窗口只贡献一次命中，默认每 8 个有效发现评估一次。 |
+| `XRayB` | 在两次独立矿脉发现之间，测量玩家实际挖出的连通路径。当前矿点须由这一段挖掘揭开。`fake-cave-detection` 为告警提供人工矿道上下文。 |
+| `XRayC` | 在破坏首块之前用 26 邻接搜索矿脉。默认连续发现 3 个完整且少于 4 块的矿脉后告警，同一矿脉由第一位挖到的玩家贡献样本。 |
+
+已加载且属于当前区域的方块才参与扫描。玩家放置和活塞搬运按插件运行期间观察到的事件识别，历史随区块卸载清除。爆破挖矿和不同世界的矿物生成都会影响统计，随包规则只记录和提醒。
+
+升级时，原 `XRayD/E/F` 的配置分别迁移到 `XRayA/B/C`，旧版共用列表迁移到 `XRay.blocks`。迁移保留已有的 `enabled: false`。旧处罚规则中的检查名和权限仍可匹配。已有服务器若缺少对应的处罚组，可将下例加到 `Punishments` 下。
+
+```yaml
+    XRayA:
+        remove-violations-after: 300
+        checks:
+            - "XRayA"
+        commands:
+            - "1:1 [log]"
+            - "1:1 [alert]"
+```
+
+### `FairReach` — PvP 延迟补偿上限
+
+```yaml
+FairReach:
+    enabled: true
+    block-impossible-hits: false
+    max-ping-compensation-ms: 300
+    reach-leniency: 0.1
+```
+
+FairReach 比较常规补偿和设有延迟上限时的攻击距离，只评估玩家之间的攻击。默认开启，通过服务端日志中的 `[FairReach]` 和 `would block` 记录观察结果。将 `block-impossible-hits` 设为 `true` 可拦截这些命中。
+
+`max-ping-compensation-ms` 设置目标位置等待回执的补偿上限。检测额外给目标位置插值留出时间。`reach-leniency` 是额外的距离容差，单位为方块。结果单独记录，与作弊违规和自动处罚分开。
+
+### `CrashJ` 至 `CrashS` — 实验性收包防护
+
+这十项检查由 `experimental-checks` 启用，使用 `Crash` 处罚组。随包规则在首次记录违规时踢出玩家。Tab 补全与插件频道的自定义限制列表默认留空。
+
+检查覆盖书本编辑、创造模式物品、收包频率、插件频道、告示牌、配方、命令补全和背包数据。
+
 ### `PingSpoofB` / `C` / `D` — 延迟伪造
 
 ```yaml
@@ -563,16 +633,20 @@ PingSpoofD:
 
 > 📌 这三个的 `cancelVL: 0` 同样是**「第一次违规就取消」**的意思（和上面 `cancelvl` 规则一致，只是大小写不同）。想关掉就填 `-1`。
 
-### `InteractA` / `InteractB` — 交互
+### `InteractA` / `InteractB` / `InteractC` — 交互
 
 ```yaml
 InteractA:
-    cancelVL: 0
+    cancelvl: 0
 InteractB:
-    cancelVL: 0
+    cancelvl: 0
+InteractC:
+    cancelvl: 0
 ```
 
-> 📌 同上：`0` = 第一次违规就取消，`-1` = 永不取消。
+`cancelvl` 设为 `0` 时会在第一次违规时取消操作，设为 `-1` 时只记录违规。
+
+`InteractC` 检查村民交易、操作盔甲架等右键实体时的方块遮挡。它覆盖普通交互和带点击位置的交互。
 
 ### `AutoclickerA` — 连点器
 
@@ -597,6 +671,50 @@ AutoclickerA:
 | `entropy-jiff-min` / `max` | 熵的判定区间 |
 
 **看不懂这些参数很正常**——它们是通过统计学方法分析点击规律的。改动前建议先用 `/watchneko verbose` 观察一段时间，确认当前默认值在你服务器上是否误报。
+
+### `AutoclickerB` — 有序点击窗口
+
+实验检查。将 `experimental-checks` 和 `AutoclickerB.enabled` 都设为 `true` 后启用。它按接收时间采集战斗中的主手挥手间隔，比较两段连续、互不重叠的窗口。检查会跳过近常量窗口和具有显著短周期节拍的窗口，过短或过长的间隔会中断采样。
+
+默认处罚配置通过 `Autoclicker` 组匹配此检查。自定义组仅列出特定检查名时，可把 `AutoclickerB` 加入对应组。
+
+配置只有旧的 `AutoclickerF` 区段时，插件会将它迁移至 `AutoclickerB` 并保留设置。两个区段同时存在时使用 `AutoclickerB`。旧名仍可用于自定义处罚和权限。
+
+| 设置 | 默认值 | 说明 |
+|---|---:|---|
+| `window-size` | 24 | 每段窗口的间隔数。 |
+| `required-matches` | 2 | 连续匹配的独立窗口对数。 |
+| `max-gap-ms` | 350 | 可计入窗口的最大间隔。 |
+| `combat-window-ms` | 3000 | 最近一次攻击之后继续采集挥手的时长。 |
+| `min-correlation` | 0.95 | 两段序列的最低 Pearson 相关系数。 |
+| `max-relative-error` | 0.10 | 两段间隔的最大相对平均绝对差。 |
+| `min-deviation-ms` | 4.0 | 两段窗口各自所需的最低标准差。 |
+
+### `CPSLimit` 可选近战规则
+
+```yaml
+CPSLimit:
+    enabled: true
+    max-cps: 20
+    damage-multiplier: 0.25
+    duration-ms: 250
+```
+
+插件默认在玩家交战期间统计主手挥手。最近一秒的点击数持续超过 `max-cps` 时，近战 PvP 命中在 `duration-ms` 内按 `damage-multiplier` 结算。若已有更低的伤害倍率，取较低值。可将 `CPSLimit.enabled` 设为 `false`，也可通过 `watchneko.exempt.cpslimit` 豁免指定玩家。
+
+### `AutoTotem` — 图腾补充时序
+
+实验检查。开启 `experimental-checks` 后生效，`AutoTotem.enabled` 可单独关闭。检查关联副手图腾触发事件和发给玩家的状态包，将点击包与背包事件配对，并在下一刻核对副手。鼠标拾取、背包快捷键和手持物品交换分别统计，每次触发最多贡献一个样本。
+
+| 设置 | 默认值 | 说明 |
+|---|---:|---|
+| `sample-size` | 8 | 每种补充方式的独立窗口大小。 |
+| `rapid-pairs` | 4 | 鼠标拾取后快速放入副手的最少次数。 |
+| `rapid-gap-ms` | 5 | 两次点击的接收间隔上限。 |
+| `max-replenish-ms` | 1500 | 发送图腾状态包至收到补充操作的最长时间。 |
+| `max-deviation-ms` | 15 | 补充时间标准差上限。 |
+
+时间使用状态包发送和补充包接收时刻。网络合包可能压缩点击间隔，相近时间收到其他包的样本会跳过。默认 `AutoTotem` 惩罚组记录并提醒，已有服务器需在自己的 `punishments.yml` 中增加匹配 `AutoTotem` 的规则。
 
 ### 瞄准检测
 
@@ -775,7 +893,7 @@ AnalysisO:
 - `AnalysisB`、`AnalysisG`、`AnalysisH`、`AnalysisI`、`AnalysisJ`、`AnalysisL`、`AnalysisM`、`AnalysisO` 进默认的 `Analysis` 组，与其他 Analysis 检测共用阈值。
 - `AnalysisC`、`AnalysisD`、`AnalysisE`、`AnalysisF`、`AnalysisK`、`AnalysisN` 被 `!` 从 `Analysis` 组剔除，放进 `NoPenalty` 组：只记录、只提醒，永不踢人。
 
-> ⚠️ `punishments.yml` 的 `checks` 列表**按顺序处理**：`- "!AnalysisC"` 必须写在 `- "Analysis"` 之后，否则排除不生效，这些检测会重新开始累计违规。
+> 组内的 `"!AnalysisC"` 会从 `"Analysis"` 的匹配结果中排除 `AnalysisC`，可以写在匹配项前后。
 
 ---
 
@@ -810,10 +928,35 @@ experimental-checks: false
 
 | 值 | 效果 |
 |---|---|
-| `false`（默认） | 不启用实验性检测 |
-| `true` | **启用实验性检测** |
+| `false`（默认） | 由全局开关控制的实验检测处于关闭状态 |
+| `true` | 启用由全局开关控制的实验检测 |
 
 实验性检测在提醒里会带一个 `*` 号（符号可以在 `messages.yml` 的 `experimental-symbol` 里改）。
+
+`PacketOrderP` 检查客户端在同一个 tick 内关闭背包后攻击、挖掘或点击玩家背包的包序。它需要客户端 tick 结束包，结果由 `punishments.yml` 中匹配 `PacketOrder` 的规则处理。
+
+### `ChestStealer`、`ScaffoldF` 和 `AimX`
+
+三个检查的 `enabled` 默认开启。启用时，`punishments.yml` 的处罚组需要列出检查全名。随包规则为每项单独记录和告警。 [处罚配置](punishments.md#实验性取物搭桥和转向检查)
+
+| 检查 | 判定依据 |
+|---|---|
+| `ChestStealer` | 在多个储物容器会话里，玩家通过 Shift 点击或数字键快速、稳定地取出不同槽位的物品，并随即关窗。每次取物需匹配补偿后的窗口、服务端点击事件和物品转移。 |
+| `ScaffoldF` | 连续横向放置时，后续方块依附近期已确认放置的方块。结合放置间隔、方向变化、脚下状态与转向量评分。 |
+| `AimX` | 持续攻击同一名玩家时，对齐补偿后的目标位置，比较实际水平转向与对准目标所需转向。要求多个采样窗口内的关系稳定。 |
+
+### 连点和旧版输入时序
+
+这些检查的 `enabled` 默认开启。启用时，`punishments.yml` 的处罚组需要列出检查全名。随包的 `InputTiming` 组只记录和告警。 [处罚配置](punishments.md#输入时序检查)
+
+| 检查 | 判定依据 |
+|---|---|
+| `AutoclickerC` | 战斗挥手间隔的相邻差分，结合原始间隔的重复上界，在独立窗口中验证。 |
+| `AutoclickerD` | 反复开始并取消挖掘同一非瞬挖方块，统计间隔和挥手证据。 |
+| `AutoclickerE` | 持续高速且规律的主手右键。物品使用与方块交互分别取样。 |
+| `LegacyItemRelease` | 原生 1.8 及更早连接在已知空闲期间反复发送物品释放动作。 |
+| `LegacyEntityActions` | 原生 1.8 及更早客户端在同一 tick 内重复发送相反的冲刺或潜行动作。 |
+| `LegacyFastBreak` | 1.8 及更早客户端在同一 tick 开始并完成非瞬挖，或完成后立即开始挖另一方块。 |
 
 > ⚠️ **实验性检测误报率可能较高**。开之前建议先配合 `verbose` 模式观察一段时间。
 

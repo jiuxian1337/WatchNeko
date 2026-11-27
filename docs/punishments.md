@@ -42,7 +42,16 @@
 | `Break` | 方块破坏 | 5 | 25 |
 | `TransactionOrder` | 事务顺序 | 5 | 25 |
 | `MultiActions` | 多动作 | 5 | 25 |
-| `Misc` | 载具、疾跑、Baritone、鞘翅、聊天、漏洞 | 5 | 25 |
+| `Misc` | 载具、疾跑、鞘翅、聊天、漏洞 | 5 | 25 |
+| `AutoTotem` | 图腾补充时序 | 1 | — |
+| `InputTiming` | 连点节奏和旧版输入时序 | 1 | — |
+| `ChestStealer` | 多次快速取物后关窗 | 1 | — |
+| `ScaffoldF` | 连续搭桥放置 | 1 | — |
+| `AimX` | 对目标的水平转向相关性 | 1 | — |
+| `Baritone` | 挖掘与放置瞄准 | 1 | — |
+| `XRayA` | 近期爆炸露矿命中 | 1 | — |
+| `XRayB` | 矿点间的挖掘路径 | 1 | — |
+| `XRayC` | 连续发现小矿脉 | 1 | — |
 | `Analysis` | 行为分析 | 5 | 25 |
 | `NoPenalty` | 只提醒不累计的启发式瞄准（`AnalysisC`–`AnalysisF`） | 1 | **不踢** |
 | `Invalid` | 不可能的俯仰角（`BadPacketsZ`） | 1 | **1** |
@@ -119,14 +128,13 @@ Punishments:              # 最外层，不要动
 
 **这是最容易搞错的一点。** 每一段有**一个**计数器，这一段里 `checks` 列出的**所有检测共用它**。
 
-举例，默认配置里的 `Misc` 段管着 6 个检测：
+默认配置里的 `Misc` 段包含 5 类检测。
 
 ```yaml
     Misc:
         checks:
             - "Vehicle"
             - "Sprint"
-            - "Baritone"
             - "Elytra"
             - "Chat"
             - "Exploit"
@@ -134,7 +142,7 @@ Punishments:              # 最外层，不要动
             - "25:0 kick %player% cheating"
 ```
 
-那个 `25` 是**这 6 个检测加起来的违规总数**，不是每个检测各 25 次。也就是说：载具违规 10 次 + 鞘翅 8 次 + 聊天 7 次 = 25 次 → 踢出。
+`25` 是这组检测加起来的违规总数。载具违规 10 次、鞘翅 8 次、聊天 7 次，累计 25 次后踢出。
 
 **想让每个检测各算各的，就得给它们拆成独立的段**：
 
@@ -282,7 +290,8 @@ checks:
 ```
 
 - 每一项是一个检测名
-- 匹配是**子串匹配**（不完全等于，也不只是开头匹配）
+- 常规检查按检测名或别名做不区分大小写的子串匹配
+- 下文的实验性取物、搭桥、转向和输入时序检查须按全名加入处罚组
 - **加感叹号 `!` 表示排除**：
 
 ```yaml
@@ -293,9 +302,9 @@ checks:
 
 **什么时候需要排除**：某个检测误报多，但你不想关掉整组，就可以单独把它摘出来，放到单独的一段里给个宽松的阈值。
 
-### ⚠️ 匹配是「包含」而不是「等于」
+### 名称匹配
 
-插件判断一个检测属不属于这一段，用的是**「配置里写的字符串是不是检测名的子串」**。所以：
+常规检查的匹配示例：
 
 | 你写的 | 会匹配到 | 说明 |
 |---|---|---|
@@ -308,6 +317,43 @@ checks:
 
 **另一个特性**：检测还有一个「别名」，两个名字**任一**匹配上就算匹配。所以 `AntiKB` 和 `AntiKnockback` 都能指向同一个检测。
 
+### 实验性取物、搭桥和转向检查
+
+升级时保留现有 `punishments.yml`。在 `Punishments` 下加入包含检查全名的告警组，即可记录三个检查的结果。
+
+```yaml
+    ExperimentalBehavior:
+        remove-violations-after: 300
+        checks:
+            - "ChestStealer"
+            - "ScaffoldF"
+            - "AimX"
+        commands:
+            - "1:1 [log]"
+            - "1:1 [alert]"
+```
+
+### 输入时序检查
+
+已有服务器可以把下面的告警组加入 `Punishments`。组里的每项检查都使用全名。
+
+```yaml
+    InputTiming:
+        remove-violations-after: 300
+        checks:
+            - "AutoclickerC"
+            - "AutoclickerD"
+            - "AutoclickerE"
+            - "LegacyItemRelease"
+            - "LegacyEntityActions"
+            - "LegacyFastBreak"
+        commands:
+            - "1:1 [log]"
+            - "1:1 [alert]"
+```
+
+CPS 限制由 `config.yml` 中的 `CPSLimit` 控制。
+
 ### 关于 `Misc` 段
 
 默认配置里 `Misc` 这一段管着一堆不同的检测：
@@ -317,7 +363,6 @@ Misc:
     checks:
         - "Vehicle"
         - "Sprint"
-        - "Baritone"
         - "Elytra"
         - "Chat"
         - "Exploit"
