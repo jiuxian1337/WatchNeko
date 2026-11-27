@@ -1,6 +1,7 @@
 package cc.watchneko.command.commands;
 
 import cc.watchneko.platform.api.sender.Sender;
+import cc.watchneko.WatchNekoAPI;
 import cc.watchneko.predictionengine.MovementCheckRunner;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -40,5 +41,9 @@ public class GrimPerf {
 
         sender.sendMessage(message1);
         sender.sendMessage(message2);
+        var players = WatchNekoAPI.INSTANCE.getPlayerDataManager().getEntries();
+        long unified = players.stream().filter(player -> player.movementSimulation.isUnified()).count();
+        sender.sendMessage(Component.text("Movement connections: unified " + unified + ", legacy "
+                + Math.max(0, players.size() - unified), NamedTextColor.GRAY));
     }
 }

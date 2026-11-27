@@ -1,5 +1,6 @@
 package cc.watchneko.predictionengine.predictions;
 
+import cc.watchneko.checks.impl.movement.NoSlowC;
 import cc.watchneko.player.PlayerData;
 import cc.watchneko.predictionengine.SneakingEstimator;
 import cc.watchneko.predictionengine.movementtick.MovementTickerPlayer;
@@ -28,9 +29,13 @@ public class PredictionEngine {
     }
 
     public static Vector3dm transformInputsToVector(PlayerData player, Vector3dm theoreticalInput) {
+        return transformInputsToVector(player, theoreticalInput, player.packetStateData.isSlowedByUsingItem());
+    }
+
+    private static Vector3dm transformInputsToVector(PlayerData player, Vector3dm theoreticalInput, boolean itemSlowdown) {
         if (player.getClientVersion().isNewerThanOrEquals(ClientVersion.V_1_21_5)) {
             Vec2 moveVector = new Vec2((float) theoreticalInput.getX(), (float) theoreticalInput.getZ()).normalized();
-            Vec2 input = modifyInput(player, moveVector);
+            Vec2 input = modifyInput(player, moveVector, itemSlowdown);
             return new Vector3dm(input.x(), 0, input.y());
         }
         float bestPossibleX;
@@ -45,7 +50,7 @@ public class PredictionEngine {
             bestPossibleZ = Math.min(Math.max(-1f, Math.round(theoreticalInput.getZ())), 1f);
         }
 
-        if (player.packetStateData.isSlowedByUsingItem()) {
+        if (itemSlowdown) {
             bestPossibleX *= 0.2F;
             bestPossibleZ *= 0.2F;
         }
@@ -65,11 +70,15 @@ public class PredictionEngine {
     }
 
     public static Vec2 modifyInput(PlayerData player, Vec2 moveVector) {
+        return modifyInput(player, moveVector, player.packetStateData.isSlowedByUsingItem());
+    }
+
+    private static Vec2 modifyInput(PlayerData player, Vec2 moveVector, boolean itemSlowdown) {
         if (moveVector.lengthSquared() == 0.0F) {
             return moveVector;
         } else {
             Vec2 input = moveVector.scale(0.98F);
-            if (player.packetStateData.isSlowedByUsingItem() && !player.inVehicle()) {
+            if (itemSlowdown && !player.inVehicle()) {
                 input = input.scale(0.2F);
             }
 
@@ -150,6 +159,8 @@ public class PredictionEngine {
 
         VectorData bestCollisionVel = null;
         Vector3dm beforeCollisionMovement = null;
+        boolean bestStepped = false;
+        Vector3dm bestTravel = null;
         Vector3dm originalClientVel = player.clientVelocity.clone();
 
         SimpleCollisionBox originalBB = player.boundingBox;
@@ -160,15 +171,20 @@ public class PredictionEngine {
                 : originalBB;
 
         player.skippedTickInActualMovement = false;
+        NoSlowC.Prediction dualPrediction = player.checkManager.getPostPredictionCheck(NoSlowC.class).beginPrediction();
+        boolean movingBlocks = player.movementSimulation.isUnified() && player.compensatedWorld.blockMotion.isActive();
 
-        for (VectorData clientVelAfterInput : possibleVelocities) {
+        for (int index = 0; index < possibleVelocities.size(); index++) {
+            VectorData clientVelAfterInput = possibleVelocities.get(index);
             Vector3dm primaryPushMovement = handleStartingVelocityUncertainty(player, clientVelAfterInput, player.actualMovement);
 
-            Vector3dm bestTheoreticalCollisionResult = VectorUtils.cutBoxToVector(player.actualMovement, new SimpleCollisionBox(0, Math.min(0, primaryPushMovement.getY()), 0, primaryPushMovement.getX(), Math.max(0.6, primaryPushMovement.getY()), primaryPushMovement.getZ()).sort());
-            // Check if this vector could ever possible beat the last vector in terms of accuracy
-            // This is quite a good optimization :)
-            if (bestTheoreticalCollisionResult.distanceSquared(player.actualMovement) > bestInput && !clientVelAfterInput.isKnockback() && !clientVelAfterInput.isExplosion()) {
-                continue;
+            // A moving block may displace the player beyond the candidate's travel bounds.
+            if (!movingBlocks && !clientVelAfterInput.isKnockback() && !clientVelAfterInput.isExplosion()) {
+                var movementBounds = new SimpleCollisionBox(0, Math.min(0, primaryPushMovement.getY()), 0,
+                        primaryPushMovement.getX(), Math.max(0.6, primaryPushMovement.getY()), primaryPushMovement.getZ()).sort();
+                if (VectorUtils.cutBoxToVector(player.actualMovement, movementBounds).distanceSquared(player.actualMovement) > bestInput) {
+                    continue;
+                }
             }
 
             if (clientVelAfterInput.isZeroPointZeroThree()) {
@@ -180,7 +196,9 @@ public class PredictionEngine {
             // Returns pair of primary push movement, and then outputvel
             Pair<Vector3dm, Vector3dm> output = doSeekingWallCollisions(player, primaryPushMovement, originalClientVel, clientVelAfterInput);
             primaryPushMovement = output.first();
-            Vector3dm outputVel = clampMovementToHardBorder(player, output.second());
+            Vector3dm travel = output.second();
+            Vector3dm shove = player.movementSimulation.candidateShove();
+            Vector3dm outputVel = clampMovementToHardBorder(player, shove == null ? travel : travel.clone().add(shove));
 
             double resultAccuracy = outputVel.distanceSquared(player.actualMovement);
 
@@ -189,11 +207,13 @@ public class PredictionEngine {
                 player.skippedTickInActualMovement = true;
             }
 
-            if (clientVelAfterInput.isKnockback()) {
+            boolean measurable = player.movementSimulation.canJudgeMovement();
+
+            if (measurable && clientVelAfterInput.isKnockback()) {
                 player.checkManager.getKnockbackHandler().handlePredictionAnalysis(Math.sqrt(player.uncertaintyHandler.reduceOffset(resultAccuracy)));
             }
 
-            if (clientVelAfterInput.isExplosion()) {
+            if (measurable && clientVelAfterInput.isExplosion()) {
                 player.checkManager.getExplosionHandler().handlePredictionAnalysis(Math.sqrt(player.uncertaintyHandler.reduceOffset(resultAccuracy)));
             }
 
@@ -215,7 +235,7 @@ public class PredictionEngine {
             // Whatever, if someone uses phase or something they will get caught by everything else...
             // Unlike knockback/explosions, there is no reason to force collisions to run to check it.
             // As not flipping item is preferred... it gets ran before any other options
-            if (player.packetStateData.isSlowedByUsingItem() && !clientVelAfterInput.isFlipItem()) {
+            if (measurable && player.packetStateData.isSlowedByUsingItem() && !clientVelAfterInput.isFlipItem()) {
                 player.checkManager.getNoSlow().handlePredictionAnalysis(Math.sqrt(player.uncertaintyHandler.reduceOffset(resultAccuracy)));
             }
 
@@ -224,16 +244,23 @@ public class PredictionEngine {
                 continue;
             }
 
-            if (resultAccuracy < bestInput) {
+            if (measurable && dualPrediction != null) {
+                dualPrediction.measure(index, clientVelAfterInput.isFlipItem(),
+                        player.uncertaintyHandler.reduceOffset(Math.sqrt(resultAccuracy)));
+            }
+
+            double score = resultAccuracy;
+            if (score < bestInput && shove == null
+                    && player.wouldCollisionResultFlagGroundSpoof(primaryPushMovement.getY(), travel.getY())) {
+                score += 0.0001 * 0.0001;
+            }
+            if (score < bestInput) {
                 bestCollisionVel = clientVelAfterInput.returnNewModified(outputVel, VectorData.VectorType.BestVelPicked);
                 bestCollisionVel.preUncertainty = clientVelAfterInput;
                 beforeCollisionMovement = primaryPushMovement;
-
-                // We basically want to avoid falsing ground spoof, try to find a vector that works
-                if (player.wouldCollisionResultFlagGroundSpoof(primaryPushMovement.getY(), bestCollisionVel.vector.getY()))
-                    resultAccuracy += 0.0001 * 0.0001;
-
-                bestInput = resultAccuracy;
+                bestStepped = player.uncertaintyHandler.isStepMovement;
+                bestTravel = shove == null ? null : travel;
+                bestInput = score;
             }
 
             // Close enough, there's no reason to continue our predictions (if either kb or explosion will flag, continue searching)
@@ -243,6 +270,15 @@ public class PredictionEngine {
         }
 
         assert beforeCollisionMovement != null;
+        if (player.movementSimulation.isUnified()) {
+            player.uncertaintyHandler.isStepMovement = bestStepped;
+            player.movementSimulation.selectTravel(bestTravel);
+        }
+        if (player.movementSimulation.canJudgeMovement() && dualPrediction != null && !player.skippedTickInActualMovement
+                && !bestCollisionVel.isZeroPointZeroThree() && !player.uncertaintyHandler.isStepMovement
+                && dualPrediction.needsCompletion()) {
+            finishDualPrediction(player, possibleVelocities, originalClientVel, originalBB, pointThreeThanksMojang, dualPrediction);
+        }
 
         player.clientVelocity = beforeCollisionMovement.clone();
         player.predictedVelocity = bestCollisionVel; // Set predicted vel to get the vector types later in the move method
@@ -251,6 +287,35 @@ public class PredictionEngine {
         // If the closest vector is 0.03, consider it 0.03.
         if (player.predictedVelocity.isZeroPointZeroThree()) {
             player.skippedTickInActualMovement = true;
+        }
+    }
+
+    private void finishDualPrediction(PlayerData player, List<VectorData> candidates, Vector3dm originalClientVel,
+                                      SimpleCollisionBox originalBox, SimpleCollisionBox skippedTickBox,
+                                      NoSlowC.Prediction prediction) {
+        SimpleCollisionBox previousBox = player.boundingBox;
+        boolean stepMovement = player.uncertaintyHandler.isStepMovement;
+        try {
+            // The primary search skips candidates against a global best. Exclude a group only
+            // after checking its remaining candidates against the same frame.
+            prediction.complete(candidates, candidate -> {
+                if (candidate.isKnockback() || candidate.isExplosion()) {
+                    return Double.NaN;
+                }
+                player.boundingBox = candidate.isZeroPointZeroThree() ? skippedTickBox : originalBox;
+                Vector3dm movement = handleStartingVelocityUncertainty(player, candidate, player.actualMovement);
+                Vector3dm collided = doSeekingWallCollisions(player, movement, originalClientVel, candidate).second();
+                Vector3dm shove = player.movementSimulation.candidateShove();
+                if (shove != null) collided.add(shove);
+                if (player.uncertaintyHandler.isStepMovement) {
+                    return Double.NaN;
+                }
+                Vector3dm predicted = clampMovementToHardBorder(player, collided);
+                return player.uncertaintyHandler.reduceOffset(predicted.distance(player.actualMovement));
+            });
+        } finally {
+            player.boundingBox = previousBox;
+            player.uncertaintyHandler.isStepMovement = stepMovement;
         }
     }
 
@@ -270,7 +335,6 @@ public class PredictionEngine {
         primaryPushMovement = new Vector3dm(testX, testY, testZ);
 
         Vector3dm outputVel = Collisions.collide(player, primaryPushMovement.getX(), primaryPushMovement.getY(), primaryPushMovement.getZ(), originalClientVel.getY(), clientVelAfterInput);
-
         if (testX == outputVel.getX()) { // the player didn't have X collision, don't ruin offset by collision epsilon
             primaryPushMovement.setX(primaryPushMovement.getX() - xAdditional);
             outputVel.setX(outputVel.getX() - xAdditional);
@@ -530,7 +594,7 @@ public class PredictionEngine {
     }
 
     public Vector3dm handleStartingVelocityUncertainty(PlayerData player, VectorData vector, Vector3dm targetVec) {
-        double avgColliding = Collections.max(player.uncertaintyHandler.collidingEntities);
+        double avgColliding = player.movementSimulation.isUnified() ? 0 : Collections.max(player.uncertaintyHandler.collidingEntities);
 
         double additionHorizontal = player.uncertaintyHandler.getOffsetHorizontal(vector);
         double additionVertical = player.uncertaintyHandler.getVerticalOffset(vector);
@@ -752,7 +816,7 @@ public class PredictionEngine {
             minVector.setZ(Math.min(minVector.getZ() - pistonZ, pistonZ));
             maxVector.setZ(Math.max(maxVector.getZ() + pistonZ, pistonZ));
         }
-        return VectorUtils.cutBoxToVector(targetVec, minVector, maxVector);
+        return player.movementSimulation.applyEntityPush(VectorUtils.cutBoxToVector(targetVec, minVector, maxVector), targetVec);
     }
 
     public void endOfTick(PlayerData player, double d) {
@@ -796,6 +860,7 @@ public class PredictionEngine {
             }
         }
 
+        boolean itemSlowdown = player.packetStateData.isSlowedByUsingItem();
         for (int loopSlowed = 0; loopSlowed <= 1; loopSlowed++) {
             // Loop twice for the using item status if the player is using a trident
             // (Or in the future mojang desync's with another item and we can't be sure)
@@ -803,6 +868,7 @@ public class PredictionEngine {
             // I tried using delays, vertical collision detection, and other methods for sneaking
             // But nothing works as well as brute force
             for (int loopUsingItem = 0; loopUsingItem <= 1; loopUsingItem++) {
+                boolean flippedItem = loopUsingItem == 1;
                 for (VectorData possibleLastTickOutput : possibleVectors) {
                     // Only do this when there is tick skipping (unless we want to allow cheating)
                     if (loopSlowed == 1 && !possibleLastTickOutput.isZeroPointZeroThree() && player.isForceSlowMovement())
@@ -812,7 +878,7 @@ public class PredictionEngine {
                             for (int applyStuckSpeed = 1; applyStuckSpeed >= 0; applyStuckSpeed--) {
                                 if (applyStuckSpeed == 0 && player.isForceStuckSpeed()) break;
 
-                                Vector3dm input = transformInputsToVector(player, new Vector3dm(strafe, 0, forward));
+                                Vector3dm input = transformInputsToVector(player, new Vector3dm(strafe, 0, forward), itemSlowdown ^ flippedItem);
                                 VectorData result = new VectorData(possibleLastTickOutput.vector.clone()
                                         .add(getMovementResultFromInput(player, input, speed, player.xRot)),
                                         possibleLastTickOutput, VectorData.VectorType.InputResult);
@@ -821,8 +887,7 @@ public class PredictionEngine {
                                     result = result.returnNewModified(result.vector.clone().multiply(player.stuckSpeedMultiplier), VectorData.VectorType.StuckMultiplier);
                                 }
                                 result = result.returnNewModified(handleOnClimbable(result.vector.clone(), player), VectorData.VectorType.Climbable);
-                                // Signal that we need to flip sneaking bounding box
-                                if (loopUsingItem == 1)
+                                if (flippedItem)
                                     result = result.returnNewModified(VectorData.VectorType.Flip_Use_Item);
                                 returnVectors.add(result);
                             }
@@ -830,7 +895,6 @@ public class PredictionEngine {
                     }
                 }
 
-                player.packetStateData.setSlowedByUsingItem(!player.packetStateData.isSlowedByUsingItem());
             }
             // TODO: Secure this? Do we care about minor 1.9-1.18.1 (not 1.18.2+!) bypasses that no client exploits yet?
             // I personally don't care because 1.8 and 1.18.2 are much more popular than any weird version

@@ -78,6 +78,9 @@ public final class Collisions {
     }
 
     public static Vector3dm collide(PlayerData player, double desiredX, double desiredY, double desiredZ, double clientVelY, VectorData data) {
+        if (player.movementSimulation.isUnified()) {
+            return cc.watchneko.predictionengine.MovementCollisionSolver.solve(player, desiredX, desiredY, desiredZ, clientVelY, data);
+        }
         if (desiredX == 0 && desiredY == 0 && desiredZ == 0) return new Vector3dm();
 
         final SimpleCollisionBox grabBoxesBB = player.boundingBox.copy();
@@ -259,17 +262,23 @@ public final class Collisions {
 
     // This is mostly taken from Tuinity collisions
     public static boolean getCollisionBoxes(PlayerData player, SimpleCollisionBox wantedBB, List<SimpleCollisionBox> listOfBlocks, boolean onlyCheckCollide) {
-        SimpleCollisionBox expandedBB = wantedBB.copy();
+        return getCollisionBoxes(player, wantedBB, listOfBlocks, onlyCheckCollide,
+                player.boundingBox == null ? player.lastY : player.boundingBox.minY);
+    }
+
+    public static boolean getCollisionBoxes(PlayerData player, SimpleCollisionBox wantedBB, List<SimpleCollisionBox> listOfBlocks,
+                                            boolean onlyCheckCollide, double feet) {
+        boolean unified = player.movementSimulation.isUnified();
 
         boolean collided = addWorldBorder(player, wantedBB, listOfBlocks, onlyCheckCollide);
         if (onlyCheckCollide && collided) return true;
 
-        int minBlockX = (int) Math.floor(expandedBB.minX - COLLISION_EPSILON) - 1;
-        int maxBlockX = (int) Math.floor(expandedBB.maxX + COLLISION_EPSILON) + 1;
-        int minBlockY = (int) Math.floor(expandedBB.minY - COLLISION_EPSILON) - 1;
-        int maxBlockY = (int) Math.floor(expandedBB.maxY + COLLISION_EPSILON) + 1;
-        int minBlockZ = (int) Math.floor(expandedBB.minZ - COLLISION_EPSILON) - 1;
-        int maxBlockZ = (int) Math.floor(expandedBB.maxZ + COLLISION_EPSILON) + 1;
+        int minBlockX = (int) Math.floor(wantedBB.minX - COLLISION_EPSILON) - 1;
+        int maxBlockX = (int) Math.floor(wantedBB.maxX + COLLISION_EPSILON) + 1;
+        int minBlockY = (int) Math.floor(wantedBB.minY - COLLISION_EPSILON) - 1;
+        int maxBlockY = (int) Math.floor(wantedBB.maxY + COLLISION_EPSILON) + 1;
+        int minBlockZ = (int) Math.floor(wantedBB.minZ - COLLISION_EPSILON) - 1;
+        int maxBlockZ = (int) Math.floor(wantedBB.maxZ + COLLISION_EPSILON) + 1;
 
         final int minSection = player.compensatedWorld.getMinHeight() >> 4;
         final int minBlock = minSection << 4;
@@ -303,7 +312,7 @@ public final class Collisions {
                 for (int y = minYIterate; y <= maxYIterate; ++y) {
                     int sectionIndex = (y >> 4) - minSection;
 
-                    BaseChunk section = sections[sectionIndex];
+                    BaseChunk section = sectionIndex >= 0 && sectionIndex < sections.length ? sections[sectionIndex] : null;
 
                     if (section == null || (IS_FOURTEEN && section.isEmpty())) { // Check for empty on 1.13+ servers
                         // empty
@@ -330,11 +339,14 @@ public final class Collisions {
                             final StateType type = data.getType();
                             if (edgeCount != 3 && (edgeCount != 1 || Materials.isShapeExceedsCube(type))
                                     && (edgeCount != 2 || type == StateTypes.PISTON_HEAD)) {
-                                final CollisionBox collisionBox = CollisionData.getData(type).getMovementCollisionBox(player, player.getClientVersion(), data, x, y, z);
+                                final CollisionBox collisionBox = unified
+                                        ? cc.watchneko.predictionengine.MovementBlockShapes.movement(player, data, x, y, z, feet)
+                                        : CollisionData.getData(type).getMovementCollisionBox(player, player.getClientVersion(), data, x, y, z);
+                                if (unified && !collisionBox.isIntersected(wantedBB)) continue;
                                 // Don't add to a list if we only care if the player intersects with the block
                                 if (!onlyCheckCollide) {
                                     collisionBox.downCast(listOfBlocks);
-                                } else if (collisionBox.isCollided(wantedBB)) {
+                                } else if (unified || collisionBox.isCollided(wantedBB)) {
                                     return true;
                                 }
                             }

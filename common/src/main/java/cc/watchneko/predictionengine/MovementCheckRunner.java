@@ -35,6 +35,7 @@ import com.github.retrooper.packetevents.protocol.player.GameMode;
 import com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState;
 import com.github.retrooper.packetevents.protocol.world.states.defaulttags.BlockTags;
 import com.github.retrooper.packetevents.protocol.world.states.type.StateTypes;
+import com.github.retrooper.packetevents.util.Vector3d;
 
 public class MovementCheckRunner extends Check implements PositionCheck {
     // Averaged over 500 predictions (Defaults set slightly above my 3600x results)
@@ -48,6 +49,8 @@ public class MovementCheckRunner extends Check implements PositionCheck {
     }
 
     public void processAndCheckMovementPacket(PositionUpdate data) {
+        if (!data.isTeleport() && player.compensatedWorld.isReplacingWorld()) return;
+
         // The player is in an unloaded chunk and didn't teleport
         // OR
         // This teleport wasn't valid as the player STILL hasn't loaded this damn chunk.
@@ -65,7 +68,12 @@ public class MovementCheckRunner extends Check implements PositionCheck {
         }
 
         long start = System.nanoTime();
-        check(data);
+        if (player.movementSimulation.isUnified()) player.movementSimulation.begin(player, data, true);
+        try {
+            check(data, true);
+        } finally {
+            player.movementSimulation.finishFrame();
+        }
         long length = System.nanoTime() - start;
 
         if (!player.disableGrim) {
@@ -117,7 +125,31 @@ public class MovementCheckRunner extends Check implements PositionCheck {
         player.uncertaintyHandler.lastVerticalOffset = 0;
     }
 
-    private void check(PositionUpdate update) {
+    public void finishClientTick() {
+        MovementSimulation simulation = player.movementSimulation;
+        if (!simulation.isUnified()) return;
+        if (!simulation.hasPosition() && !player.disableGrim && !player.inVehicle() && !player.isInBed
+                && !player.getSetbackTeleportUtil().insideUnloadedChunk()) {
+            var position = new Vector3d(player.x, player.y, player.z);
+            player.lastX = player.x;
+            player.lastY = player.y;
+            player.lastZ = player.z;
+            PositionUpdate idle = new PositionUpdate(position, position, player.packetStateData.packetPlayerOnGround, null, null, false);
+            simulation.begin(player, idle, false);
+            try {
+                check(idle, false);
+            } finally {
+                simulation.finishFrame();
+            }
+        }
+        player.compensatedWorld.endSelectionTick();
+        player.compensatedWorld.blockMotion.endTick();
+        player.compensatedWorld.shareStableSections(System.nanoTime());
+        player.checkManager.getEntityReplication().tickInterpolation();
+        simulation.finishTick();
+    }
+
+    private void check(PositionUpdate update, boolean reportedPosition) {
         if (update.isTeleport()) {
             handleTeleport(update);
             return;
@@ -215,7 +247,7 @@ public class MovementCheckRunner extends Check implements PositionCheck {
                 // Server always teleports the player when they eject anyways,
                 // so just let the player control where they eject within reason, they get set back anyways
                 if (new Vector3dm(player.lastX, player.lastY, player.lastZ).distance(new Vector3dm(player.x, player.y, player.z)) > 3) {
-                    player.getSetbackTeleportUtil().executeForceResync(); // Too far! (I think this value is sane)
+                    if (reportedPosition) player.getSetbackTeleportUtil().executeForceResync();
                 }
 
                 handleTeleport(update);
@@ -410,7 +442,7 @@ public class MovementCheckRunner extends Check implements PositionCheck {
                         || checkData.first().getType() == StateTypes.CHEST || checkData.first().getType() == StateTypes.TRAPPED_CHEST);
 
         player.uncertaintyHandler.isOrWasNearGlitchyBlock = isGlitchy || player.uncertaintyHandler.isNearGlitchyBlock;
-        player.uncertaintyHandler.checkForHardCollision();
+        if (!player.movementSimulation.isUnified()) player.uncertaintyHandler.checkForHardCollision();
 
         if (player.isFlying != player.wasFlying)
             player.uncertaintyHandler.lastFlyingStatusChange.reset();
@@ -521,7 +553,7 @@ public class MovementCheckRunner extends Check implements PositionCheck {
         double offset = player.predictedVelocity.vector.distance(player.actualMovement);
         offset = player.uncertaintyHandler.reduceOffset(offset);
 
-        if (player.packetStateData.tryingToRiptide != clientClaimsRiptide) {
+        if (reportedPosition && player.packetStateData.tryingToRiptide != clientClaimsRiptide) {
             player.getSetbackTeleportUtil().executeForceResync(); // Could technically be lag due to packet timings.
         }
 
@@ -530,7 +562,7 @@ public class MovementCheckRunner extends Check implements PositionCheck {
         // Fixes LiquidBounce Jesus NCP, and theoretically AirJump bypass
         //
         // Checking for oldClientVel being too high fixes BleachHack vertical scaffold
-        if (player.getSetbackTeleportUtil().getRequiredSetBack() != null && player.getSetbackTeleportUtil().getRequiredSetBack().getTicksComplete() == 1) {
+        if (reportedPosition && player.getSetbackTeleportUtil().getRequiredSetBack() != null && player.getSetbackTeleportUtil().getRequiredSetBack().getTicksComplete() == 1) {
             Vector3dm setbackVel = player.getSetbackTeleportUtil().getRequiredSetBack().getVelocity();
             // A player must have velocity going INTO the ground to be able to jump
             // Otherwise they could ignore upwards velocity that isn't useful into more useful upwards velocity (towering)
@@ -552,22 +584,24 @@ public class MovementCheckRunner extends Check implements PositionCheck {
         // Let's hope this doesn't desync :)
         if (player.getSetbackTeleportUtil().blockOffsets) offset = 0;
 
-        if (player.skippedTickInActualMovement || !wasChecked)
+        if (reportedPosition && (player.skippedTickInActualMovement || !wasChecked))
             player.uncertaintyHandler.lastPointThree.reset();
 
         // We shouldn't attempt to send this prediction analysis into checks if we didn't predict anything
-        player.checkManager.onPredictionFinish(new PredictionComplete(offset, update, wasChecked));
+        wasChecked &= player.movementSimulation.canJudgeMovement();
+        if (player.movementSimulation.isUnified()) player.movementSimulation.commit(player, wasChecked);
+        if (reportedPosition) player.checkManager.onPredictionFinish(new PredictionComplete(offset, update, wasChecked));
 
         player.wasLastPredictionCompleteChecked = wasChecked;
 
         // Patch sprint jumping with elytra exploit
-        if (player.platformPlayer != null && player.isGliding && player.predictedVelocity.isJump() && player.isSprinting && !allowSprintJumpingWithElytra) {
+        if (reportedPosition && player.platformPlayer != null && player.isGliding && player.predictedVelocity.isJump() && player.isSprinting && !allowSprintJumpingWithElytra) {
             SetbackTeleportUtil.SetbackPosWithVector lastKnownGoodPosition = player.getSetbackTeleportUtil().lastKnownGoodPosition;
             lastKnownGoodPosition.setVector(lastKnownGoodPosition.getVector().multiply(new Vector3dm(0.6 * 0.91, 1, 0.6 * 0.91)));
             player.getSetbackTeleportUtil().executeNonSimulatingSetback();
         }
 
-        if (!wasChecked) {
+        if (reportedPosition && !wasChecked) {
             // The player wasn't checked, explosion and knockback status unknown
             player.checkManager.getExplosionHandler().forceExempt();
             player.checkManager.getKnockbackHandler().forceExempt();
@@ -621,10 +655,12 @@ public class MovementCheckRunner extends Check implements PositionCheck {
         player.minAttackSlow = 0;
         player.maxAttackSlow = 0;
 
-        player.likelyKB = null;
-        player.firstBreadKB = null;
-        player.firstBreadExplosion = null;
-        player.likelyExplosions = null;
+        if (reportedPosition) {
+            player.likelyKB = null;
+            player.firstBreadKB = null;
+            player.firstBreadExplosion = null;
+            player.likelyExplosions = null;
+        }
 
         player.trigHandler.setOffset(offset);
         player.pointThreeEstimator.endOfTickTick();

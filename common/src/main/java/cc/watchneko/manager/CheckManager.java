@@ -249,6 +249,7 @@ public class CheckManager {
                 .put(BadPacketsX.class, new BadPacketsX(player))
                 .put(NoSlowA.class, new NoSlowA(player))
                 .put(NoSlowB.class, new NoSlowB(player))
+                .put(NoSlowC.class, new NoSlowC(player))
                 .put(SprintB.class, new SprintB(player))
                 .put(SprintC.class, new SprintC(player))
                 .put(SprintD.class, new SprintD(player))

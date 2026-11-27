@@ -13,18 +13,20 @@ import java.util.concurrent.atomic.AtomicReference;
 
 @UtilityClass
 public class MainSupportingBlockPosFinder {
-    public MainSupportingBlockData findMainSupportingBlockPos(PlayerData player, MainSupportingBlockData lastSupportingBlock, Vector3d lastMovement, SimpleCollisionBox maxPose, boolean isOnGround) {
+    public MainSupportingBlockData findMainSupportingBlockPos(PlayerData player, MainSupportingBlockData lastSupportingBlock,
+                                                              Vector3d lastMovement, SimpleCollisionBox maxPose,
+                                                              Vector3d playerPos, boolean isOnGround) {
         if (!isOnGround) {
             return new MainSupportingBlockData(null, false);
         }
 
         SimpleCollisionBox slightlyBelowPlayer = new SimpleCollisionBox(maxPose.minX, maxPose.minY - 1.0E-6D, maxPose.minZ, maxPose.maxX, maxPose.minY, maxPose.maxZ);
 
-        Optional<Vector3i> supportingBlock = findSupportingBlock(player, slightlyBelowPlayer);
+        Optional<Vector3i> supportingBlock = findSupportingBlock(player, slightlyBelowPlayer, playerPos);
         if (supportingBlock.isEmpty() && (!lastSupportingBlock.lastOnGroundAndNoBlock())) {
             if (lastMovement != null) {
                 SimpleCollisionBox aabb2 = slightlyBelowPlayer.offset(-lastMovement.x, 0.0D, -lastMovement.z);
-                supportingBlock = findSupportingBlock(player, aabb2);
+                supportingBlock = findSupportingBlock(player, aabb2, playerPos);
                 return new MainSupportingBlockData(supportingBlock.orElse(null), true);
             }
         } else {
@@ -34,9 +36,7 @@ public class MainSupportingBlockPosFinder {
         return new MainSupportingBlockData(null, true);
     }
 
-    private Optional<Vector3i> findSupportingBlock(PlayerData player, SimpleCollisionBox searchBox) {
-        Vector3d playerPos = new Vector3d(player.x, player.y, player.z);
-
+    private Optional<Vector3i> findSupportingBlock(PlayerData player, SimpleCollisionBox searchBox, Vector3d playerPos) {
         AtomicReference<Vector3i> bestBlockPos = new AtomicReference<>();
         AtomicDouble blockPosDistance = new AtomicDouble(Double.MAX_VALUE);
 

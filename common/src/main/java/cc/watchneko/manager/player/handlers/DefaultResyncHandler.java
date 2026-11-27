@@ -14,12 +14,18 @@ import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerBl
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerMultiBlockChange;
 import lombok.RequiredArgsConstructor;
 
+import java.util.ArrayList;
+
 @RequiredArgsConstructor
 public class DefaultResyncHandler implements ResyncHandler {
 
     private final PlayerData player;
 
     private static void resyncPositions(PlayerData player, int minBlockX, int mY, int minBlockZ, int maxBlockX, int mxY, int maxBlockZ) {
+        if (player.movementSimulation.isUnified()) {
+            player.runSafely(() -> resyncSentStates(player, minBlockX, mY, minBlockZ, maxBlockX, mxY, maxBlockZ));
+            return;
+        }
         // Check the 4 corners of the player world for loaded chunks before calling event
         if (!player.compensatedWorld.isChunkLoaded(minBlockX >> 4, minBlockZ >> 4) || !player.compensatedWorld.isChunkLoaded(minBlockX >> 4, maxBlockZ >> 4)
                 || !player.compensatedWorld.isChunkLoaded(maxBlockX >> 4, minBlockZ >> 4) || !player.compensatedWorld.isChunkLoaded(maxBlockX >> 4, maxBlockZ >> 4))
@@ -98,6 +104,18 @@ public class DefaultResyncHandler implements ResyncHandler {
 
     // TODO (Cross-platform) make this use player.resyncHandler instead
     private static void resyncPosition(PlayerData player, int x, int y, int z, int sequence) {
+        if (player.movementSimulation.isUnified()) {
+            player.runSafely(() -> {
+                if (!player.getSetbackTeleportUtil().hasAcceptedSpawnTeleport) return;
+                int state = player.compensatedWorld.getServerSentBlockId(x, y, z);
+                if (state < 0) return;
+                player.user.sendPacket(new WrapperPlayServerBlockChange(new Vector3i(x, y, z), state));
+                if (PacketEvents.getAPI().getServerManager().getVersion().isNewerThanOrEquals(ServerVersion.V_1_19)) {
+                    player.user.sendPacket(new WrapperPlayServerAcknowledgeBlockChanges(sequence));
+                }
+            });
+            return;
+        }
         if (player.platformPlayer == null) return;
 
         final int chunkX = x >> 4;
@@ -127,6 +145,32 @@ public class DefaultResyncHandler implements ResyncHandler {
                 player.user.sendPacket(new WrapperPlayServerAcknowledgeBlockChanges(sequence)); // Make 1.19 clients apply the changes
             }
         });
+    }
+
+    private static void resyncSentStates(PlayerData player, int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
+        if (!player.getSetbackTeleportUtil().hasAcceptedSpawnTeleport) return;
+        minY = Math.max(minY, player.compensatedWorld.getMinHeight());
+        maxY = Math.min(maxY, player.compensatedWorld.getMaxHeight() - 1);
+        for (int chunkX = minX >> 4; chunkX <= maxX >> 4; chunkX++) {
+            for (int chunkZ = minZ >> 4; chunkZ <= maxZ >> 4; chunkZ++) {
+                if (!player.compensatedWorld.isChunkLoaded(chunkX, chunkZ)) continue;
+                for (int section = minY >> 4; section <= maxY >> 4; section++) {
+                    var blocks = new ArrayList<WrapperPlayServerMultiBlockChange.EncodedBlock>();
+                    for (int x = Math.max(minX, chunkX << 4); x <= Math.min(maxX, (chunkX << 4) + 15); x++) {
+                        for (int z = Math.max(minZ, chunkZ << 4); z <= Math.min(maxZ, (chunkZ << 4) + 15); z++) {
+                            for (int y = Math.max(minY, section << 4); y <= Math.min(maxY, (section << 4) + 15); y++) {
+                                int state = player.compensatedWorld.getServerSentBlockId(x, y, z);
+                                if (state >= 0) blocks.add(new WrapperPlayServerMultiBlockChange.EncodedBlock(state, x, y, z));
+                            }
+                        }
+                    }
+                    if (!blocks.isEmpty()) {
+                        player.user.sendPacket(new WrapperPlayServerMultiBlockChange(new Vector3i(chunkX, section, chunkZ),
+                                true, blocks.toArray(WrapperPlayServerMultiBlockChange.EncodedBlock[]::new)));
+                    }
+                }
+            }
+        }
     }
 
     @Override

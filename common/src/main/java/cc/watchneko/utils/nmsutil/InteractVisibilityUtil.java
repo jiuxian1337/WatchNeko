@@ -1,6 +1,7 @@
 package cc.watchneko.utils.nmsutil;
 
 import cc.watchneko.player.PlayerData;
+import cc.watchneko.predictionengine.MovementBlockShapes;
 import cc.watchneko.utils.collisions.CollisionData;
 import cc.watchneko.utils.collisions.datatypes.CollisionBox;
 import cc.watchneko.utils.collisions.datatypes.ComplexCollisionBox;
@@ -26,11 +27,15 @@ import java.util.Set;
 public class InteractVisibilityUtil {
     private static final int RAY_STEPS = 30;
     private static final double EPSILON = 1.0E-7D;
-    private static final SimpleCollisionBox[] BOX_CACHE = new SimpleCollisionBox[ComplexCollisionBox.DEFAULT_MAX_COLLISION_BOX_SIZE];
 
     public static boolean isBlockVisible(PlayerData player, Vector3i blockPos, BlockFace face) {
+        return player.compensatedWorld.withSelectionSnapshot(() -> traceBlockVisibility(player, blockPos, face));
+    }
+
+    private static boolean traceBlockVisibility(PlayerData player, Vector3i blockPos, BlockFace face) {
         final double[] eyeHeights = player.getPossibleEyeHeights();
         final SimpleCollisionBox targetBox = new SimpleCollisionBox(blockPos);
+        final SimpleCollisionBox[] collisionBoxes = new SimpleCollisionBox[ComplexCollisionBox.DEFAULT_MAX_COLLISION_BOX_SIZE];
 
         for (double eyeHeight : eyeHeights) {
             final double eyeX = player.x;
@@ -41,11 +46,11 @@ public class InteractVisibilityUtil {
                 return true;
             }
 
-            if (!isRayBlocked(player, eyeX, eyeY, eyeZ, centerOf(blockPos), targetBox)) {
+            if (!isRayBlocked(player, eyeX, eyeY, eyeZ, centerOf(blockPos), targetBox, collisionBoxes)) {
                 return true;
             }
 
-            if (walkBlockNeighbors(player, eyeX, eyeY, eyeZ, eyeHeight, blockPos, face, targetBox)) {
+            if (walkBlockNeighbors(player, eyeX, eyeY, eyeZ, eyeHeight, blockPos, face, targetBox, collisionBoxes)) {
                 return true;
             }
         }
@@ -54,11 +59,16 @@ public class InteractVisibilityUtil {
     }
 
     public static boolean isEntityVisible(PlayerData player, SimpleCollisionBox targetBox) {
+        return player.compensatedWorld.withSelectionSnapshot(() -> traceEntityVisibility(player, targetBox));
+    }
+
+    private static boolean traceEntityVisibility(PlayerData player, SimpleCollisionBox targetBox) {
         final double[] eyeHeights = player.getPossibleEyeHeights();
         final int targetBlockX = GrimMath.floor((targetBox.minX + targetBox.maxX) / 2.0D);
         final int targetBlockY = GrimMath.floor((targetBox.minY + targetBox.maxY) / 2.0D);
         final int targetBlockZ = GrimMath.floor((targetBox.minZ + targetBox.maxZ) / 2.0D);
         final Vector3i targetBlock = new Vector3i(targetBlockX, targetBlockY, targetBlockZ);
+        final SimpleCollisionBox[] collisionBoxes = new SimpleCollisionBox[ComplexCollisionBox.DEFAULT_MAX_COLLISION_BOX_SIZE];
 
         for (double eyeHeight : eyeHeights) {
             final double eyeX = player.x;
@@ -75,11 +85,11 @@ public class InteractVisibilityUtil {
                     (targetBox.minZ + targetBox.maxZ) / 2.0D
             );
 
-            if (!isRayBlocked(player, eyeX, eyeY, eyeZ, targetCenter, targetBox)) {
+            if (!isRayBlocked(player, eyeX, eyeY, eyeZ, targetCenter, targetBox, collisionBoxes)) {
                 return true;
             }
 
-            if (walkEntityNeighbors(player, eyeX, eyeY, eyeZ, eyeHeight, targetBlock, targetBox)) {
+            if (walkEntityNeighbors(player, eyeX, eyeY, eyeZ, eyeHeight, targetBlock, targetBox, collisionBoxes)) {
                 return true;
             }
         }
@@ -92,7 +102,8 @@ public class InteractVisibilityUtil {
     }
 
     private static boolean walkBlockNeighbors(PlayerData player, double eyeX, double eyeY, double eyeZ, double eyeHeight,
-                                              Vector3i sourceBlock, BlockFace face, SimpleCollisionBox targetBox) {
+                                              Vector3i sourceBlock, BlockFace face, SimpleCollisionBox targetBox,
+                                              SimpleCollisionBox[] collisionBoxes) {
         final Set<Long> visited = new HashSet<>();
         final RichAxisData axisData = new RichAxisData(priorityForFace(face), Direction.NONE);
         final Vector3i eyeBlock = new Vector3i(GrimMath.floor(eyeX), GrimMath.floor(eyeY), GrimMath.floor(eyeZ));
@@ -116,7 +127,7 @@ public class InteractVisibilityUtil {
                 if (!canPassThrough(player, current, neighbor, direction, eyeX, eyeY, eyeZ, eyeHeight, null, null, mightEdgeInteraction, axisData)) {
                     continue;
                 }
-                if (!isRayBlocked(player, eyeX, eyeY, eyeZ, centerOf(neighbor), targetBox)) {
+                if (!isRayBlocked(player, eyeX, eyeY, eyeZ, centerOf(neighbor), targetBox, collisionBoxes)) {
                     return true;
                 }
 
@@ -135,7 +146,8 @@ public class InteractVisibilityUtil {
     }
 
     private static boolean walkEntityNeighbors(PlayerData player, double eyeX, double eyeY, double eyeZ, double eyeHeight,
-                                               Vector3i sourceBlock, SimpleCollisionBox targetBox) {
+                                               Vector3i sourceBlock, SimpleCollisionBox targetBox,
+                                               SimpleCollisionBox[] collisionBoxes) {
         final Set<Long> visited = new HashSet<>();
         final RichAxisData axisData = new RichAxisData(Axis.NONE, Direction.NONE);
         final Vector3i eyeBlock = new Vector3i(GrimMath.floor(eyeX), GrimMath.floor(eyeY), GrimMath.floor(eyeZ));
@@ -160,7 +172,7 @@ public class InteractVisibilityUtil {
                 if (!canPassThrough(player, current, neighbor, direction, eyeX, eyeY, eyeZ, eyeHeight, sCollidingBox, eCollidingBox, false, axisData)) {
                     continue;
                 }
-                if (!isRayBlocked(player, eyeX, eyeY, eyeZ, centerOf(neighbor), targetBox)) {
+                if (!isRayBlocked(player, eyeX, eyeY, eyeZ, centerOf(neighbor), targetBox, collisionBoxes)) {
                     return true;
                 }
 
@@ -177,7 +189,8 @@ public class InteractVisibilityUtil {
         return false;
     }
 
-    private static boolean isRayBlocked(PlayerData player, double eyeX, double eyeY, double eyeZ, Vector3d target, SimpleCollisionBox targetBox) {
+    private static boolean isRayBlocked(PlayerData player, double eyeX, double eyeY, double eyeZ,
+                                        Vector3d target, SimpleCollisionBox targetBox, SimpleCollisionBox[] collisionBoxes) {
         final int eyeBlockX = GrimMath.floor(eyeX);
         final int eyeBlockY = GrimMath.floor(eyeY);
         final int eyeBlockZ = GrimMath.floor(eyeZ);
@@ -190,7 +203,7 @@ public class InteractVisibilityUtil {
             if (isInsideTarget(pos, targetBox)) {
                 return null;
             }
-            return checkBlockHit(player, state, pos, eyeX, eyeY, eyeZ, target.getX(), target.getY(), target.getZ());
+            return checkBlockHit(player, state, pos, eyeX, eyeY, eyeZ, target.getX(), target.getY(), target.getZ(), collisionBoxes);
         });
 
         return hit != null;
@@ -198,23 +211,25 @@ public class InteractVisibilityUtil {
 
     private static HitData checkBlockHit(PlayerData player, WrappedBlockState state, Vector3i pos,
                                          double startX, double startY, double startZ,
-                                         double endX, double endY, double endZ) {
+                                         double endX, double endY, double endZ, SimpleCollisionBox[] collisionBoxes) {
         if (state.getType().isAir()) {
             return null;
         }
 
-        final CollisionBox collisionBox = CollisionData.getData(state.getType()).getMovementCollisionBox(
+        final CollisionBox collisionBox = player.movementSimulation.isUnified()
+                ? MovementBlockShapes.selection(player, null, state, pos.getX(), pos.getY(), pos.getZ())
+                : CollisionData.getData(state.getType()).getMovementCollisionBox(
                 player, player.getClientVersion(), state, pos.getX(), pos.getY(), pos.getZ());
         if (collisionBox.isNull()) {
             return null;
         }
 
-        final int size = collisionBox.downCast(BOX_CACHE);
+        final int size = collisionBox.downCast(collisionBoxes);
         final Vector3dm start = new Vector3dm(startX, startY, startZ);
         final Vector3dm end = new Vector3dm(endX, endY, endZ);
 
         for (int i = 0; i < size; i++) {
-            final SimpleCollisionBox box = BOX_CACHE[i];
+            final SimpleCollisionBox box = collisionBoxes[i];
             if (ReachUtils.isVecInside(box, start)) {
                 continue;
             }
@@ -393,9 +408,12 @@ public class InteractVisibilityUtil {
         };
     }
 
-    private static SimpleCollisionBox[] getRelativeBoxes(PlayerData player, WrappedBlockState state, Vector3i ignoredPos) {
-        final CollisionBox collisionBox = CollisionData.getData(state.getType()).fetch(
-                player, player.getClientVersion(), state, ignoredPos.getX(), ignoredPos.getY(), ignoredPos.getZ());
+    private static SimpleCollisionBox[] getRelativeBoxes(PlayerData player, WrappedBlockState state, Vector3i pos) {
+        final CollisionBox collisionBox = player.movementSimulation.isUnified()
+                ? MovementBlockShapes.selection(player, null, state, pos.getX(), pos.getY(), pos.getZ())
+                    .offset(-pos.getX(), -pos.getY(), -pos.getZ())
+                : CollisionData.getData(state.getType()).fetch(
+                    player, player.getClientVersion(), state, pos.getX(), pos.getY(), pos.getZ());
         if (collisionBox.isNull()) {
             return new SimpleCollisionBox[0];
         }

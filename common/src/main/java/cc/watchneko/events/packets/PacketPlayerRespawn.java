@@ -25,8 +25,8 @@ import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerJo
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerRespawn;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerUpdateHealth;
 
-import java.util.List;
 import java.util.Objects;
+import java.util.function.Consumer;
 
 /**
  * PlayerRespawnS2CPacket info (1.20.2+):
@@ -54,7 +54,7 @@ public class PacketPlayerRespawn extends PacketListenerAbstract {
     private static final byte KEEP_ALL = 3;
 
     public PacketPlayerRespawn() {
-        super(PacketListenerPriority.HIGH);
+        super(PacketListenerPriority.MONITOR);
     }
 
     private boolean hasFlag(WrapperPlayServerRespawn respawn, byte flag) {
@@ -77,6 +77,8 @@ public class PacketPlayerRespawn extends PacketListenerAbstract {
 
     @Override
     public void onPacketSend(PacketSendEvent event) {
+        if (event.isCancelled()) return;
+
         if (event.getPacketType() == PacketType.Play.Server.UPDATE_HEALTH) {
             WrapperPlayServerUpdateHealth health = new WrapperPlayServerUpdateHealth(event);
 
@@ -121,6 +123,9 @@ public class PacketPlayerRespawn extends PacketListenerAbstract {
             player.entityID = joinGame.getEntityId();
             player.dimensionType = joinGame.getDimensionType();
             player.worldName = joinGame.getWorldName();
+            if (player.movementSimulation.isUnified()) {
+                player.compensatedWorld.recordSentWorld(joinGame.getDimensionType(), joinGame.getWorldName());
+            }
 
             if (PacketEvents.getAPI().getServerManager().getVersion().isOlderThan(ServerVersion.V_1_17))
                 return;
@@ -133,8 +138,10 @@ public class PacketPlayerRespawn extends PacketListenerAbstract {
             PlayerData player = WatchNekoAPI.INSTANCE.getPlayerDataManager().getPlayer(event.getUser());
             if (player == null) return;
 
-            List<Runnable> tasks = event.getTasksAfterSend();
-            tasks.add(player::sendTransaction);
+            boolean unified = player.movementSimulation.isUnified();
+            boolean sentWorldChanged = unified && player.compensatedWorld.recordSentWorld(
+                    respawn.getDimensionType(), respawn.getWorldName().orElse(null));
+            if (!unified) event.getTasksAfterSend().add(player::sendTransaction);
 
             // Force the player to accept a teleport before respawning
             // (We won't process movements until they accept a teleport, we won't let movements though either)
@@ -142,12 +149,16 @@ public class PacketPlayerRespawn extends PacketListenerAbstract {
             player.getSetbackTeleportUtil().hasAcceptedSpawnTeleport = false;
             player.getSetbackTeleportUtil().lastKnownGoodPosition = null;
 
-            // clear server entity positions when the world changes
-            if (isWorldChange(player, respawn)) {
+            // Outbound replication reads this state while subsequent packets are encoded.
+            if (sentWorldChanged || (!unified && isWorldChange(player, respawn))) {
                 player.compensatedEntities.serverPositionsMap.clear();
             }
+            if (unified) {
+                player.compensatedEntities.serverPlayerVehicle = null;
+                player.compensatedEntities.selfTrackedEntity = new TrackerData(0, 0, 0, 0, 0, EntityTypes.PLAYER, player.lastTransactionSent.get());
+            }
 
-            player.latencyUtils.addRealTimeTask(player.lastTransactionSent.get() + 1, () -> {
+            Consumer<Boolean> resetOnReceipt = changedWorld -> {
                 // From 1.16 to 1.19, this doesn't get set to false for whatever reason
                 if (player.getClientVersion().isOlderThan(ClientVersion.V_1_16) || player.getClientVersion().isNewerThanOrEquals(ClientVersion.V_1_20)) {
                     player.isSneaking = false;
@@ -188,20 +199,25 @@ public class PacketPlayerRespawn extends PacketListenerAbstract {
                 }
 
                 // EVERYTHING gets reset on a cross dimensional teleport, clear chunks and entities!
-                if (isWorldChange(player, respawn)) {
+                if (changedWorld) {
                     player.compensatedEntities.entityMap.clear();
                     player.compensatedWorld.activePistons.clear();
                     player.compensatedWorld.openShulkerBoxes.clear();
                     player.compensatedWorld.chunks.clear();
+                    if (unified) player.compensatedWorld.finishWorldReplacement();
                     player.compensatedWorld.isRaining = false;
                     player.checkManager.getBlockPlaceCheck(BadPacketsH.class).onWorldChange();
                 }
                 player.dimensionType = respawn.getDimensionType();
                 player.worldName = respawn.getWorldName().orElse(null);
 
-                player.compensatedEntities.serverPlayerVehicle = null; // All entities get removed on respawn
+                if (unified) {
+                    player.compensatedEntities.self.eject();
+                } else {
+                    player.compensatedEntities.serverPlayerVehicle = null;
+                    player.compensatedEntities.selfTrackedEntity = new TrackerData(0, 0, 0, 0, 0, EntityTypes.PLAYER, player.lastTransactionSent.get());
+                }
                 player.compensatedEntities.self = new PacketEntitySelf(player, player.compensatedEntities.self);
-                player.compensatedEntities.selfTrackedEntity = new TrackerData(0, 0, 0, 0, 0, EntityTypes.PLAYER, player.lastTransactionSent.get());
 
                 if (player.getClientVersion().isOlderThan(ClientVersion.V_1_14)) { // 1.14+ players send a packet for this, listen for it instead
                     player.isSprinting = false;
@@ -222,7 +238,19 @@ public class PacketPlayerRespawn extends PacketListenerAbstract {
                     player.compensatedEntities.self.resetAttributes();
                     player.compensatedEntities.hasSprintingAttributeEnabled = false;
                 }
-            });
+            };
+            if (unified) {
+                event.getTasksAfterSend().add(() -> {
+                    if (event.isCancelled()) return;
+                    if (sentWorldChanged) {
+                        player.compensatedWorld.beginWorldReplacement();
+                    }
+                    player.movementReceipts.packetWritten(() -> {}, receipt -> resetOnReceipt.accept(sentWorldChanged));
+                });
+            } else {
+                player.latencyUtils.addRealTimeTask(player.lastTransactionSent.get() + 1,
+                        () -> resetOnReceipt.accept(isWorldChange(player, respawn)));
+            }
         }
     }
 

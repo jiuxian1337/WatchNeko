@@ -16,6 +16,7 @@ import cc.watchneko.manager.player.features.FeatureManagerImpl;
 import cc.watchneko.manager.player.handlers.DefaultResyncHandler;
 import cc.watchneko.platform.api.player.PlatformPlayer;
 import cc.watchneko.predictionengine.MovementCheckRunner;
+import cc.watchneko.predictionengine.MovementSimulation;
 import cc.watchneko.predictionengine.PointThreeEstimator;
 import cc.watchneko.predictionengine.UncertaintyHandler;
 import cc.watchneko.utils.anticheat.LogUtil;
@@ -109,6 +110,7 @@ public class PlayerData implements GrimUser {
     public final ActionManager actionManager;
     public final PunishmentManager punishmentManager;
     public final MovementCheckRunner movementCheckRunner;
+    public final MovementSimulation movementSimulation;
     public final SyncedTags tagManager;
     public final PacketOrderProcessor packetOrderProcessor = new PacketOrderProcessor(this);
     public final long joinTime = System.currentTimeMillis();
@@ -122,6 +124,7 @@ public class PlayerData implements GrimUser {
     public final CompensatedInventory inventory;
     public final CompensatedOpenWindow openWindow = new CompensatedOpenWindow();
     public final LatencyUtils latencyUtils = new LatencyUtils(this);
+    public final MovementReceipts movementReceipts = new MovementReceipts(this);
     public final PointThreeEstimator pointThreeEstimator;
     public final TrigHandler trigHandler = new TrigHandler(this);
     public final PacketStateData packetStateData = new PacketStateData();
@@ -321,6 +324,7 @@ public class PlayerData implements GrimUser {
     public PlayerData(@NonNull User user) {
         this.user = user;
         this.uuid = user.getUUID();
+        movementSimulation = new MovementSimulation(WatchNekoAPI.INSTANCE.getConfigManager().getConfig());
         fireworks = new CompensatedFireworks(this); // Must be before checkmanager
         inventory = new CompensatedInventory(this);
 
@@ -936,7 +940,9 @@ public class PlayerData implements GrimUser {
 
     @Contract(pure = true)
     public boolean supportsEndTick() {
-        return getClientVersion().isNewerThanOrEquals(ClientVersion.V_1_21_2) && PacketEvents.getAPI().getServerManager().getVersion().isNewerThanOrEquals(ServerVersion.V_1_21_2);
+        return getClientVersion().isNewerThanOrEquals(ClientVersion.V_1_21_2)
+                && (PacketEvents.getAPI().getServerManager().getVersion().isNewerThanOrEquals(ServerVersion.V_1_21_2)
+                || movementSimulation.readsTranslatedTickEnd());
     }
 
     @Contract(pure = true)

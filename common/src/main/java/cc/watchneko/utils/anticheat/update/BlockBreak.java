@@ -1,7 +1,7 @@
 package cc.watchneko.utils.anticheat.update;
 
 import cc.watchneko.player.PlayerData;
-import cc.watchneko.utils.collisions.HitboxData;
+import cc.watchneko.predictionengine.MovementBlockShapes;
 import cc.watchneko.utils.collisions.datatypes.CollisionBox;
 import cc.watchneko.utils.collisions.datatypes.SimpleCollisionBox;
 import com.github.retrooper.packetevents.protocol.player.DiggingAction;
@@ -39,7 +39,10 @@ public final class BlockBreak {
     }
 
     public SimpleCollisionBox getCombinedBox() {
-        CollisionBox placedOn = HitboxData.getBlockHitbox(player, player.inventory.getHeldItem().getType().getPlacedType(), player.getClientVersion(), block, true, position.x, position.y, position.z);
+        CollisionBox placedOn = player.compensatedWorld.withSelectionSnapshot(() ->
+                MovementBlockShapes.interaction(player, player.inventory.getHeldItem().getType().getPlacedType(),
+                        player.movementSimulation.isUnified() ? player.compensatedWorld.getBlock(position) : block,
+                        position.x, position.y, position.z));
 
         List<SimpleCollisionBox> boxes = new ArrayList<>();
         placedOn.downCast(boxes);

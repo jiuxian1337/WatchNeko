@@ -204,7 +204,7 @@ public class PacketSelfMetadataListener extends PacketListenerAbstract {
                                     player.packetStateData.setSlowedByUsingItem(isActive);
 
                                     if (isActive) {
-                                        player.packetStateData.itemInUseHand = isOffhand ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND;
+                                        player.packetStateData.setItemInUseHand(isOffhand ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND);
                                     }
                                 }
                             });

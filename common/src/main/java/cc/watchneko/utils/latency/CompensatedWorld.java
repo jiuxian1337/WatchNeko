@@ -2,6 +2,7 @@ package cc.watchneko.utils.latency;
 
 import cc.watchneko.WatchNekoAPI;
 import cc.watchneko.player.PlayerData;
+import com.github.retrooper.packetevents.event.PacketSendEvent;
 import cc.watchneko.utils.change.BlockModification;
 import cc.watchneko.utils.chunks.Column;
 import cc.watchneko.utils.collisions.CollisionData;
@@ -48,6 +49,7 @@ import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectAVLTreeMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectLinkedOpenHashMap;
 import lombok.Getter;
 
@@ -58,7 +60,16 @@ public class CompensatedWorld {
     public static final ClientVersion blockVersion = PacketEvents.getAPI().getServerManager().getVersion().toClientVersion();
     private static final WrappedBlockState airData = WrappedBlockState.getByGlobalId(blockVersion, 0);
     public final PlayerData player;
+    public final cc.watchneko.predictionengine.BlockMotion blockMotion;
     public final Long2ObjectMap<Column> chunks;
+    private final Long2ObjectOpenHashMap<SentBlock> sentBlocks = new Long2ObjectOpenHashMap<>();
+    private final Long2ObjectOpenHashMap<Object> pendingColumns = new Long2ObjectOpenHashMap<>();
+    private final Long2IntOpenHashMap selectionBeforePrediction = new Long2IntOpenHashMap();
+    private boolean readSelectionSnapshot;
+    private boolean replacingWorld;
+    private DimensionType sentDimension;
+    private String sentWorldName;
+    private final java.util.LinkedHashMap<DirtySection, Long> sectionsToShare = new java.util.LinkedHashMap<>();
     // Packet locations for blocks
     public final Set<PistonData> activePistons = new HashSet<>();
     public final Set<ShulkerData> openShulkerBoxes = new HashSet<>();
@@ -82,6 +93,7 @@ public class CompensatedWorld {
 
     public CompensatedWorld(PlayerData player) {
         this.player = player;
+        blockMotion = new cc.watchneko.predictionengine.BlockMotion(player);
         chunks = new Long2ObjectOpenHashMap<>(81, 0.5f);
         noNegativeBlocks = player.getClientVersion().isOlderThanOrEquals(ClientVersion.V_1_16_4);
     }
@@ -109,7 +121,8 @@ public class CompensatedWorld {
         for (Iterator<Int2ObjectMap.Entry<List<Vector3i>>> it = serverIsCurrentlyProcessingThesePredictions.int2ObjectEntrySet().iterator(); it.hasNext(); ) {
             Map.Entry<Integer, List<Vector3i>> iter = it.next();
             if (iter.getKey() <= prediction) {
-                applyBlockChanges(iter.getValue());
+                if (player.movementSimulation.isUnified()) applyConfirmedBlockChanges(iter.getValue());
+                else applyBlockChanges(iter.getValue());
                 it.remove();
             } else {
                 break;
@@ -118,26 +131,37 @@ public class CompensatedWorld {
     }
 
     public void handleBlockBreakAck(Vector3i blockPos, int blockState, DiggingAction action, boolean accepted) {
-        if (!accepted || action != DiggingAction.START_DIGGING || !unackedActions.containsKey(new Pair<>(blockPos, action))) {
-            player.sendTransaction(); // This packet actually matters
-            player.latencyUtils.addRealTimeTask(player.lastTransactionSent.get(), () -> {
-                Vector3d playerPos = unackedActions.remove(new Pair<>(blockPos, action));
+        var key = new Pair<>(blockPos, action);
+        if (!accepted || action != DiggingAction.START_DIGGING || !unackedActions.containsKey(key)) {
+            Runnable restore = () -> {
+                Vector3d playerPos = unackedActions.remove(key);
                 handleAck(blockPos, blockState, playerPos);
-            });
+            };
+            if (player.movementSimulation.isUnified()) restore.run();
+            else {
+                player.sendTransaction();
+                player.latencyUtils.addRealTimeTask(player.lastTransactionSent.get(), restore);
+            }
         } else {
-            unackedActions.remove(new Pair<>(blockPos, action));
+            unackedActions.remove(key);
         }
 
-        player.latencyUtils.addRealTimeTask(player.lastTransactionSent.get(), () -> {
+        Runnable trim = () -> {
             while (unackedActions.size() >= 50) {
                 this.unackedActions.removeFirst();
             }
-        });
+        };
+        if (player.movementSimulation.isUnified()) trim.run();
+        else player.latencyUtils.addRealTimeTask(player.lastTransactionSent.get(), trim);
     }
 
     private void applyBlockChanges(List<Vector3i> toApplyBlocks) {
         player.sendTransaction();
-        player.latencyUtils.addRealTimeTask(player.lastTransactionSent.get(), () -> toApplyBlocks.forEach(vector3i -> {
+        player.latencyUtils.addRealTimeTask(player.lastTransactionSent.get(), () -> applyConfirmedBlockChanges(toApplyBlocks));
+    }
+
+    private void applyConfirmedBlockChanges(List<Vector3i> toApplyBlocks) {
+        for (Vector3i vector3i : toApplyBlocks) {
             BlockPrediction predictionData = originalServerBlocks.get(vector3i.getSerializedPosition());
 
             // We are the last to care about this prediction, remove it to stop memory leak
@@ -146,7 +170,7 @@ public class CompensatedWorld {
                 originalServerBlocks.remove(vector3i.getSerializedPosition());
                 handleAck(vector3i, predictionData.getOriginalBlockId(), predictionData.getPlayerPosition());
             }
-        }));
+        }
     }
 
     private void handleAck(Vector3i vector3i, int originalBlockId, Vector3d playerPosition) {
@@ -258,6 +282,9 @@ public class CompensatedWorld {
         BlockPrediction prediction = originalServerBlocks.get(asVector.getSerializedPosition());
 
         if (isCurrentlyPredicting) {
+            if (player.movementSimulation.isUnified() && !selectionBeforePrediction.containsKey(asVector.getSerializedPosition())) {
+                selectionBeforePrediction.put(asVector.getSerializedPosition(), getBlock(x, y, z).getGlobalId());
+            }
             if (prediction == null) {
                 originalServerBlocks.put(asVector.getSerializedPosition(), new BlockPrediction(currentlyChangedBlocks, asVector, getBlock(asVector).getGlobalId(), new Vector3d(player.x, player.y, player.z))); // Remember server controlled block type
             } else {
@@ -304,6 +331,12 @@ public class CompensatedWorld {
                 player.pointThreeEstimator.handleChangeBlock(x, y, z, previousState);
 
                 column.sectionForWrite(sectionIndex).set(blockVersion, x & 0xF, offsetY & 0xF, z & 0xF, combinedID);
+                if (player.movementSimulation.isUnified()) {
+                    blockMotion.blockReplaced(asVector, newState);
+                    var dirty = new DirtySection(chunkPositionToLong(x >> 4, z >> 4), sectionIndex);
+                    sectionsToShare.remove(dirty);
+                    sectionsToShare.put(dirty, System.nanoTime());
+                }
 
                 // Handle stupidity such as fluids changing in idle ticks.
                 player.pointThreeEstimator.handleChangeBlock(x, y, z, newState);
@@ -361,6 +394,11 @@ public class CompensatedWorld {
         for (PistonData data : activePistons) {
             for (SimpleCollisionBox box : data.boxes) {
                 if (playerBox.isCollided(box)) {
+                    if (data.hasSlimeBlock || (data.hasHoneyBlock && player.getClientVersion().isOlderThan(ClientVersion.V_1_15_2))) {
+                        player.uncertaintyHandler.slimePistonBounces.add(data.direction);
+                    }
+                    if (player.movementSimulation.isUnified() && blockMotion.hasPiston(data.base)) break;
+
                     modX = Math.max(modX, Math.abs(data.direction.getModX() * 0.51D));
                     modY = Math.max(modY, Math.abs(data.direction.getModY() * 0.51D));
                     modZ = Math.max(modZ, Math.abs(data.direction.getModZ() * 0.51D));
@@ -368,16 +406,14 @@ public class CompensatedWorld {
                     playerBox.expandMax(modX, modY, modZ);
                     playerBox.expandMin(modX * -1, modY * -1, modZ * -1);
 
-                    if (data.hasSlimeBlock || (data.hasHoneyBlock && player.getClientVersion().isOlderThan(ClientVersion.V_1_15_2))) {
-                        player.uncertaintyHandler.slimePistonBounces.add(data.direction);
-                    }
-
                     break;
                 }
             }
         }
 
         for (ShulkerData data : openShulkerBoxes) {
+            if (player.movementSimulation.isUnified()
+                    && (data.entity != null || blockMotion.hasLid(data.blockPos))) continue;
             SimpleCollisionBox shulkerCollision = data.getCollision();
 
             BlockFace direction;
@@ -443,7 +479,15 @@ public class CompensatedWorld {
 
     public WrappedBlockState getBlock(int x, int y, int z) {
         if (noNegativeBlocks && y < 0) return airData;
+        if (readSelectionSnapshot && !selectionBeforePrediction.isEmpty()) {
+            int state = selectionBeforePrediction.getOrDefault(new Vector3i(x, y, z).getSerializedPosition(), -1);
+            if (state >= 0) return WrappedBlockState.getByGlobalId(blockVersion, state);
+        }
 
+        return getMovementBlock(x, y, z);
+    }
+
+    private WrappedBlockState getMovementBlock(int x, int y, int z) {
         try {
             Column column = getChunk(x >> 4, z >> 4);
 
@@ -607,6 +651,119 @@ public class CompensatedWorld {
         long chunkPosition = chunkPositionToLong(chunkX, chunkZ);
         player.latencyUtils.addRealTimeTask(player.lastTransactionSent.get(), () -> chunks.put(chunkPosition, chunk));
     }
+
+    public void trackServerBlocks(PacketSendEvent event, List<SentBlock> updates) {
+        player.movementReceipts.after(event, () -> {
+            for (SentBlock update : updates) sentBlocks.put(update.position.getSerializedPosition(), update);
+        }, receipt -> {
+            for (SentBlock update : updates) {
+                long key = update.position.getSerializedPosition();
+                if (sentBlocks.get(key) == update) sentBlocks.remove(key);
+                updateBlock(update.position.x, update.position.y, update.position.z, update.stateId);
+            }
+        });
+    }
+
+    public void trackServerColumn(PacketSendEvent event, int x, int z, BaseChunk[] sections, boolean full) {
+        long position = chunkPositionToLong(x, z);
+        Object pending = new Object();
+        player.movementReceipts.after(event, () -> pendingColumns.put(position, pending), receipt -> {
+            pendingColumns.remove(position, pending);
+            sectionsToShare.keySet().removeIf(section -> section.position == position
+                    && (full || (section.index < sections.length && sections[section.index] != null)));
+            if (sections == null) {
+                chunks.remove(position);
+                blockMotion.removeColumn(x, z);
+            } else if (full) {
+                blockMotion.removeColumn(x, z);
+                chunks.put(position, new Column(x, z, sections, receipt));
+            } else {
+                Column current = chunks.get(position);
+                if (current != null) current.mergeChunks(sections);
+            }
+        });
+    }
+
+    /** Latest server state suitable for a correction, or -1 during unloading or world replacement. */
+    public int getServerSentBlockId(int x, int y, int z) {
+        if (replacingWorld || (noNegativeBlocks && y < 0) || y < minHeight || y >= maxHeight || !isChunkLoaded(x >> 4, z >> 4)
+                || pendingColumns.containsKey(chunkPositionToLong(x >> 4, z >> 4))) return -1;
+        long key = new Vector3i(x, y, z).getSerializedPosition();
+        SentBlock sent = sentBlocks.get(key);
+        if (sent != null) return sent.stateId;
+        BlockPrediction predicted = originalServerBlocks.get(key);
+        return predicted == null ? getMovementBlock(x, y, z).getGlobalId() : predicted.getOriginalBlockId();
+    }
+
+    public <T> T withSelectionSnapshot(java.util.function.Supplier<T> query) {
+        boolean previous = readSelectionSnapshot;
+        readSelectionSnapshot = player.movementSimulation.isUnified();
+        try {
+            return query.get();
+        } finally {
+            readSelectionSnapshot = previous;
+        }
+    }
+
+    public void endSelectionTick() {
+        selectionBeforePrediction.clear();
+    }
+
+    public void shareStableSections(long now) {
+        if (sectionsToShare.isEmpty()) return;
+        var iterator = sectionsToShare.entrySet().iterator();
+        for (int count = 0; count < 4 && iterator.hasNext(); count++) {
+            var entry = iterator.next();
+            if (now - entry.getValue() < java.util.concurrent.TimeUnit.SECONDS.toNanos(5)) break;
+            DirtySection key = entry.getKey();
+            Column column = chunks.get(key.position);
+            if (column != null && key.index < column.chunks().length) {
+                column.chunks()[key.index] = cc.watchneko.utils.chunks.ChunkSectionPool.shareSection(blockVersion,
+                        column.chunks()[key.index]);
+            }
+            iterator.remove();
+        }
+    }
+
+    public void beginWorldReplacement() {
+        replacingWorld = true;
+        sentBlocks.clear();
+        pendingColumns.clear();
+        endSelectionTick();
+        player.movementReceipts.beginWorld();
+    }
+
+    public boolean isReplacingWorld() {
+        return replacingWorld;
+    }
+
+    public boolean recordSentWorld(DimensionType dimension, String worldName) {
+        DimensionType previousDimension = sentDimension;
+        String previousName = sentWorldName;
+        sentDimension = dimension;
+        sentWorldName = worldName;
+        if (previousDimension == null) return false;
+        if (blockVersion.isNewerThanOrEquals(ClientVersion.V_1_16) && (previousName != null || worldName != null)) {
+            return !Objects.equals(previousName, worldName);
+        }
+        return dimension.getId(blockVersion) != previousDimension.getId(blockVersion)
+                || !Objects.equals(dimension.getName(), previousDimension.getName());
+    }
+
+    public void finishWorldReplacement() {
+        replacingWorld = false;
+        originalServerBlocks.clear();
+        serverIsCurrentlyProcessingThesePredictions.clear();
+        unackedActions.clear();
+        currentlyChangedBlocks.clear();
+        sectionsToShare.clear();
+        blockMotion.clear();
+        isCurrentlyPredicting = false;
+    }
+
+    public record SentBlock(Vector3i position, int stateId) {}
+
+    private record DirtySection(long position, int index) {}
 
     public StateType getBlockType(double x, double y, double z) {
         return getBlock((int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z)).getType();

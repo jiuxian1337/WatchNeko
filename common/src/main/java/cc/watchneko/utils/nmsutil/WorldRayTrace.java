@@ -1,8 +1,8 @@
 package cc.watchneko.utils.nmsutil;
 
 import cc.watchneko.player.PlayerData;
+import cc.watchneko.predictionengine.MovementBlockShapes;
 import cc.watchneko.utils.collisions.CollisionData;
-import cc.watchneko.utils.collisions.HitboxData;
 import cc.watchneko.utils.collisions.datatypes.CollisionBox;
 import cc.watchneko.utils.collisions.datatypes.SimpleCollisionBox;
 import cc.watchneko.utils.data.HitData;
@@ -25,6 +25,11 @@ import java.util.function.BiFunction;
 @UtilityClass
 public class WorldRayTrace {
     public static HitData getNearestBlockHitResult(PlayerData player, StateType heldItem, boolean sourcesHaveHitbox, boolean fluidPlacement, boolean itemUsePlacement) {
+        return player.compensatedWorld.withSelectionSnapshot(() -> traceSelection(player, heldItem, sourcesHaveHitbox,
+                fluidPlacement, itemUsePlacement));
+    }
+
+    private static HitData traceSelection(PlayerData player, StateType heldItem, boolean sourcesHaveHitbox, boolean fluidPlacement, boolean itemUsePlacement) {
         Vector3d startingPos = new Vector3d(player.x, player.y + player.getEyeHeight(), player.z);
         Vector3dm startingVec = new Vector3dm(startingPos.getX(), startingPos.getY(), startingPos.getZ());
         Ray trace = new Ray(player, startingPos.getX(), startingPos.getY(), startingPos.getZ(), player.xRot, player.yRot);
@@ -38,7 +43,7 @@ public class WorldRayTrace {
                 return null;
             }
 
-            CollisionBox data = HitboxData.getBlockHitbox(player, heldItem, player.getClientVersion(), block, false, vector3i.getX(), vector3i.getY(), vector3i.getZ());
+            CollisionBox data = MovementBlockShapes.selection(player, heldItem, block, vector3i.getX(), vector3i.getY(), vector3i.getZ());
             List<SimpleCollisionBox> boxes = new ArrayList<>();
             data.downCast(boxes);
 
@@ -47,7 +52,7 @@ public class WorldRayTrace {
             BlockFace bestFace = null;
 
             for (SimpleCollisionBox box : boxes) {
-                Pair<Vector3dm, BlockFace> intercept = ReachUtils.calculateIntercept(box, trace.origin(), trace.getPointAtDistance(distance));
+                Pair<Vector3dm, BlockFace> intercept = ReachUtils.calculateIntercept(box, trace.origin(), endVec);
                 if (intercept.first() == null) continue; // No intercept
 
                 Vector3dm hitLoc = intercept.first();
@@ -69,7 +74,7 @@ public class WorldRayTrace {
                         : player.compensatedWorld.getFluidLevelAt(vector3i.getX(), vector3i.getY(), vector3i.getZ());
                 SimpleCollisionBox box = new SimpleCollisionBox(vector3i.getX(), vector3i.getY(), vector3i.getZ(), vector3i.getX() + 1, vector3i.getY() + waterHeight, vector3i.getZ() + 1);
 
-                Pair<Vector3dm, BlockFace> intercept = ReachUtils.calculateIntercept(box, trace.origin(), trace.getPointAtDistance(distance));
+                Pair<Vector3dm, BlockFace> intercept = ReachUtils.calculateIntercept(box, trace.origin(), endVec);
 
                 if (intercept.first() != null) {
                     return new HitData(vector3i, intercept.first(), intercept.second(), block);

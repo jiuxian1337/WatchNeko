@@ -43,6 +43,7 @@ public class CompensatedEntities {
     public final Object2ObjectOpenHashMap<UUID, UserProfile> profiles = new Object2ObjectOpenHashMap<>();
     private final PlayerData player;
     public Integer serverPlayerVehicle = null;
+    private long nextClientTickOrder;
     public boolean hasSprintingAttributeEnabled = false;
     public TrackerData selfTrackedEntity;
     public PacketEntitySelf self;
@@ -64,6 +65,13 @@ public class CompensatedEntities {
 
     public void tick() {
         this.self.setPositionRaw(player, new SimpleCollisionBox(player.x, player.y, player.z, player.x, player.y, player.z));
+        if (player.movementSimulation.isUnified()) {
+            PacketEntity local = ridingRoot(self.riding);
+            PacketEntity server = ridingRoot(serverPlayerVehicle == null ? null : entityMap.get(serverPlayerVehicle.intValue()));
+            positionRidingTree(local, 0);
+            if (server != local) positionRidingTree(server, 0);
+            return;
+        }
         for (PacketEntity vehicle : entityMap.values()) {
             for (PacketEntity passenger : vehicle.passengers) {
                 tickPassenger(vehicle, passenger);
@@ -82,7 +90,46 @@ public class CompensatedEntities {
         }
 
         for (PacketEntity passenger : new ArrayList<>(entity.passengers)) {
+            settlePassenger(passenger);
             passenger.eject();
+        }
+        entity.eject();
+    }
+
+    public boolean isUntrackedRider(PacketEntity entity) {
+        if (entity.riding == null || entity == self) return false;
+        PacketEntity root = ridingRoot(entity.riding);
+        return root != ridingRoot(self.riding)
+                && (serverPlayerVehicle == null || root != ridingRoot(entityMap.get(serverPlayerVehicle.intValue())));
+    }
+
+    public void settlePassenger(PacketEntity passenger) {
+        if (!player.movementSimulation.isUnified() || !isUntrackedRider(passenger)) return;
+        SimpleCollisionBox seat = riderFeet(passenger, 0);
+        if (seat != null) passenger.settlePosition(player, seat);
+    }
+
+    public SimpleCollisionBox riderFeet(PacketEntity rider, int depth) {
+        if (depth >= 32) return null;
+        PacketEntity vehicle = rider.riding;
+        if (vehicle == null) return rider.getPossibleLocationBoxes();
+        SimpleCollisionBox base = riderFeet(vehicle, depth + 1);
+        if (base == null) return null;
+        return base.offset(0, BoundingBoxSize.getMyRidingOffset(vehicle) + BoundingBoxSize.getPassengerRidingOffset(player, rider), 0);
+    }
+
+    public static PacketEntity ridingRoot(PacketEntity entity) {
+        while (entity != null && entity.riding != null) entity = entity.riding;
+        return entity;
+    }
+
+    private void positionRidingTree(PacketEntity vehicle, int depth) {
+        if (vehicle == null || depth >= 32) return;
+        for (PacketEntity passenger : vehicle.passengers) {
+            SimpleCollisionBox box = vehicle.getPossibleLocationBoxes().offset(0,
+                    BoundingBoxSize.getMyRidingOffset(vehicle) + BoundingBoxSize.getPassengerRidingOffset(player, passenger), 0);
+            passenger.settlePosition(player, box);
+            positionRidingTree(passenger, depth + 1);
         }
     }
 
@@ -211,6 +258,7 @@ public class CompensatedEntities {
             packetEntity = new PacketEntity(player, uuid, entityType, position.getX(), position.getY(), position.getZ());
         }
 
+        packetEntity.clientTickOrder = ++nextClientTickOrder;
         entityMap.put(entityID, packetEntity);
     }
 
@@ -313,6 +361,7 @@ public class CompensatedEntities {
 
             EntityData<?> height = WatchableIndexUtil.getIndex(watchableObjects, id + 2);
             if (height != null) {
+                shulker.setPeek((byte) height.getValue());
                 if ((byte) height.getValue() == 0) {
                     ShulkerData data = new ShulkerData(shulker, player.lastTransactionSent.get(), true);
                     player.compensatedWorld.openShulkerBoxes.remove(data);

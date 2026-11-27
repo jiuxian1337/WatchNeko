@@ -53,6 +53,10 @@ max-transaction-time: 60
 # Do not enable this if you are not sure what you are doing.
 disable-pong-cancelling: false
 
+movement:
+    # Applies to new connections. Set legacy to use the previous movement engine.
+    engine: unified
+
 # Should the duplicate movement packet be cancelled?
 # Mojang has fixed this issue in 1.21. This was their attempt to fix the "bucket desync". https://bugs.mojang.com/browse/MC-12363
 # This setting only applies to 1.17-1.20.5 clients on 1.8 servers.
@@ -160,6 +164,16 @@ NoSlowA:
     setbackvl: 0
     # Decay's when the player uses an item AND is slowed by it
     decay: 0.25
+
+# Experimental item slowdown comparison. Requires experimental-checks.
+NoSlowC:
+    enabled: false
+    # Both distances use blocks after prediction uncertainty.
+    fit-distance: 0.003
+    reject-distance: 0.012
+    required-unslowed-ticks: 4
+    # Extra collision queries per movement before leaving the result inconclusive.
+    max-additional-candidates: 64
 
 VelocityA:
     # How much should we multiply total advantage by when the player is legit

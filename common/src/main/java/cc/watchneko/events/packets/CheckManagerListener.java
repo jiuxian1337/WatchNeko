@@ -627,6 +627,10 @@ public class CheckManagerListener extends PacketListenerAbstract {
             return;
         }
 
+        handlePlayPacket(player, event);
+    }
+
+    static void handlePlayPacket(PlayerData player, PacketReceiveEvent event) {
         // 被撤销的c03不应该再进入模拟
         if (event.isCancelled()
                 && WrapperPlayClientPlayerFlying.isFlying(event.getPacketType())) {
@@ -811,6 +815,12 @@ public class CheckManagerListener extends PacketListenerAbstract {
 
         // Call the packet checks last as they can modify the contents of the packet
         // Such as the NoFallA check setting the player to not be on the ground
+        if (player.movementSimulation.isUnified() && !event.isCancelled()
+                && !player.packetStateData.lastPacketWasTeleport && !player.packetStateData.lastPacketWasOnePointSeventeenDuplicate) {
+            if (player.movementSimulation.endsTick(event.getPacketType(), player.supportsEndTick(), player.inVehicle())) {
+                player.movementCheckRunner.finishClientTick();
+            }
+        }
         player.checkManager.onPacketReceive(event);
 
         if (player.packetStateData.cancelDuplicatePacket) {
@@ -842,6 +852,10 @@ public class CheckManagerListener extends PacketListenerAbstract {
         if (event.getConnectionState() != ConnectionState.PLAY) return;
         PlayerData player = WatchNekoAPI.INSTANCE.getPlayerDataManager().getPlayer(event.getUser());
         if (player == null) return;
+
+        if (player.movementSimulation.isUnified() && event.getPacketType() == PacketType.Play.Server.BUNDLE) {
+            player.movementReceipts.bundleDelimiter(event);
+        }
 
         if (event.getPacketType() == PacketType.Play.Server.OPEN_WINDOW) {
             player.latencyUtils.addRealTimeTask(player.lastTransactionSent.get(), () -> player.serverOpenedInventoryThisTick = true);

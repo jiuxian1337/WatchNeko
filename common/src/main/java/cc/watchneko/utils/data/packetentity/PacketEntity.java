@@ -46,11 +46,13 @@ public class PacketEntity extends TypedPacketEntity {
     public PacketEntity riding;
     public List<PacketEntity> passengers = new ArrayList<>(0);
     public boolean isDead = false;
+    public long clientTickOrder;
     public boolean isBaby = false;
     public boolean hasGravity = true;
     public boolean trackEntityEquipment = false;
     private ReachInterpolationData oldPacketLocation;
     private ReachInterpolationData newPacketLocation;
+    private List<SimpleCollisionBox> pendingMovementBoxes;
     private Object2IntMap<PotionType> potionsMap = null;
     private EnumMap<EquipmentSlot, ItemStack> equipment = null;
 
@@ -184,6 +186,9 @@ public class PacketEntity extends TypedPacketEntity {
     }
 
     public void mount(PacketEntity vehicle) {
+        for (PacketEntity parent = vehicle; parent != null; parent = parent.riding) {
+            if (parent == this) return;
+        }
         if (riding != null) eject();
         vehicle.passengers.add(this);
         riding = vehicle;
@@ -214,11 +219,37 @@ public class PacketEntity extends TypedPacketEntity {
     }
 
     public SimpleCollisionBox getPossibleCollisionBoxes() {
-        if (oldPacketLocation == null) {
-            return newPacketLocation.getPossibleHitboxCombined();
+        SimpleCollisionBox combined = newPacketLocation.getPossibleHitboxCombined();
+        if (oldPacketLocation != null) combined.encompass(oldPacketLocation.getPossibleHitboxCombined());
+        if (pendingMovementBoxes != null) {
+            for (SimpleCollisionBox pending : pendingMovementBoxes) combined.encompass(pending);
         }
+        return combined;
+    }
 
-        return ReachInterpolationData.combineCollisionBox(oldPacketLocation.getPossibleHitboxCombined(), newPacketLocation.getPossibleHitboxCombined());
+    public boolean appendMovementBoxes(List<SimpleCollisionBox> boxes) {
+        return pendingMovementBoxes == null && (oldPacketLocation == null || oldPacketLocation.appendMovementBoxes(boxes))
+                && newPacketLocation != null && newPacketLocation.appendMovementBoxes(boxes);
+    }
+
+    public boolean hasPendingMovement() {
+        return pendingMovementBoxes != null;
+    }
+
+    public void sentMovement(SimpleCollisionBox box) {
+        if (pendingMovementBoxes == null) pendingMovementBoxes = new ArrayList<>(1);
+        pendingMovementBoxes.add(box);
+    }
+
+    public void receivedMovement(SimpleCollisionBox box) {
+        if (pendingMovementBoxes == null) return;
+        pendingMovementBoxes.remove(box);
+        if (pendingMovementBoxes.isEmpty()) pendingMovementBoxes = null;
+    }
+
+    public void settlePosition(PlayerData player, SimpleCollisionBox feet) {
+        setPositionRaw(player, feet);
+        oldPacketLocation = null;
     }
 
     public OptionalInt getPotionEffectLevel(PotionType effect) {

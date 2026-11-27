@@ -2,9 +2,11 @@ package cc.watchneko.platform.bukkit.events;
 
 import cc.watchneko.WatchNekoAPI;
 import cc.watchneko.platform.bukkit.utils.convert.BukkitConversionUtils;
+import cc.watchneko.platform.bukkit.world.BukkitPlatformWorld;
 import cc.watchneko.player.PlayerData;
 import cc.watchneko.utils.collisions.datatypes.SimpleCollisionBox;
 import cc.watchneko.utils.data.PistonData;
+import cc.watchneko.utils.latency.CompensatedWorld;
 import com.github.retrooper.packetevents.protocol.world.BlockFace;
 import com.github.retrooper.packetevents.util.Vector3d;
 import com.github.retrooper.packetevents.util.Vector3i;
@@ -18,6 +20,7 @@ import org.bukkit.event.block.BlockPistonRetractEvent;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 public class PistonEvent implements Listener {
 
@@ -67,18 +70,8 @@ public class PistonEvent implements Listener {
                         piston.getY() + event.getDirection().getModY(),
                         piston.getZ() + event.getDirection().getModZ()));
 
-        final int chunkX = event.getBlock().getX() >> 4;
-        final int chunkZ = event.getBlock().getZ() >> 4;
         final BlockFace blockFace = BukkitConversionUtils.fromBukkitFace(event.getDirection());
-        final Vector3i sourcePos = new Vector3i(piston.getX(), piston.getY(), piston.getZ());
-
-        for (PlayerData player : WatchNekoAPI.INSTANCE.getPlayerDataManager().getEntries()) {
-            if (player.compensatedWorld.isChunkLoaded(chunkX, chunkZ) && isCloseEnough(sourcePos, player.compensatedEntities.self.trackedServerPosition.getPos())) {
-                final int lastTrans = player.lastTransactionSent.get();
-                PistonData data = new PistonData(blockFace, boxes, lastTrans, true, hasSlimeBlock, hasHoneyBlock);
-                player.latencyUtils.addRealTimeTaskAsync(lastTrans, () -> player.compensatedWorld.activePistons.add(data));
-            }
-        }
+        recordMotion(piston, blockFace, true, event.getBlocks(), boxes, hasSlimeBlock, hasHoneyBlock);
     }
 
     // For some unknown reason, bukkit handles this stupidly
@@ -126,16 +119,29 @@ public class PistonEvent implements Listener {
             }
         }
 
-        final int chunkX = event.getBlock().getX() >> 4;
-        final int chunkZ = event.getBlock().getZ() >> 4;
-        Vector3i sourcePos = new Vector3i(event.getBlock().getX(), event.getBlock().getY(), event.getBlock().getZ());
+        recordMotion(event.getBlock(), face, false, event.getBlocks(), boxes, hasSlimeBlock, hasHoneyBlock);
+    }
 
+    private static void recordMotion(Block piston, BlockFace face, boolean extending, List<Block> sources,
+                                     List<SimpleCollisionBox> boxes, boolean slime, boolean honey) {
+        Vector3i base = new Vector3i(piston.getX(), piston.getY(), piston.getZ());
+        UUID worldId = piston.getWorld().getUID();
+        BukkitPlatformWorld world = new BukkitPlatformWorld(piston.getWorld());
+        List<CompensatedWorld.SentBlock> moved = sources.stream().map(block -> {
+            var pos = new Vector3i(block.getX(), block.getY(), block.getZ());
+            return new CompensatedWorld.SentBlock(pos, world.getBlockAt(pos.x, pos.y, pos.z).getGlobalId());
+        }).toList();
         for (PlayerData player : WatchNekoAPI.INSTANCE.getPlayerDataManager().getEntries()) {
-            if (player.compensatedWorld.isChunkLoaded(chunkX, chunkZ) && isCloseEnough(sourcePos, player.compensatedEntities.self.trackedServerPosition.getPos())) {
-                int lastTrans = player.lastTransactionSent.get();
-                PistonData data = new PistonData(face, boxes, lastTrans, false, hasSlimeBlock, hasHoneyBlock);
-                player.latencyUtils.addRealTimeTaskAsync(lastTrans, () -> player.compensatedWorld.activePistons.add(data));
-            }
+            int transaction = player.lastTransactionSent.get();
+            player.latencyUtils.addRealTimeTaskAsync(transaction, () -> {
+                if (player.platformPlayer == null || !worldId.equals(player.platformPlayer.getWorld().getUID())
+                        || !player.compensatedWorld.isChunkLoaded(base.x >> 4, base.z >> 4)
+                        || !isCloseEnough(base, player.compensatedEntities.self.trackedServerPosition.getPos())) return;
+                player.compensatedWorld.activePistons.add(new PistonData(base, face, boxes, transaction, extending, slime, honey));
+                if (player.movementSimulation.isUnified()) {
+                    player.compensatedWorld.blockMotion.captureStructure(base, extending, moved);
+                }
+            });
         }
     }
 }

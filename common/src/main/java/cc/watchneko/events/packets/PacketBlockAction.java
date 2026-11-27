@@ -8,9 +8,12 @@ import com.github.retrooper.packetevents.event.PacketListenerAbstract;
 import com.github.retrooper.packetevents.event.PacketListenerPriority;
 import com.github.retrooper.packetevents.event.PacketSendEvent;
 import com.github.retrooper.packetevents.protocol.packettype.PacketType;
+import com.github.retrooper.packetevents.protocol.world.blockentity.BlockEntityTypes;
 import com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState;
+import com.github.retrooper.packetevents.protocol.world.states.type.StateTypes;
 import com.github.retrooper.packetevents.util.Vector3i;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerBlockAction;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerBlockEntityData;
 
 // If a player doesn't get this packet, then they don't know the shulker box is currently opened
 // Meaning if a player enters a chunk with an opened shulker box, they see the shulker box as closed.
@@ -25,12 +28,31 @@ public class PacketBlockAction extends PacketListenerAbstract {
 
     @Override
     public void onPacketSend(PacketSendEvent event) {
+        if (event.getPacketType() == PacketType.Play.Server.BLOCK_ENTITY_DATA) {
+            PlayerData player = WatchNekoAPI.INSTANCE.getPlayerDataManager().getPlayer(event.getUser());
+            if (player != null && player.movementSimulation.isUnified()) {
+                var data = new WrapperPlayServerBlockEntityData(event);
+                if (data.getBlockEntityType() == BlockEntityTypes.PISTON) {
+                    player.movementReceipts.after(event, () -> {}, receipt ->
+                            player.compensatedWorld.blockMotion.blockEntityData(data.getPosition(), data.getNBT()));
+                }
+            }
+            return;
+        }
         if (event.getPacketType() == PacketType.Play.Server.BLOCK_ACTION) {
             PlayerData player = WatchNekoAPI.INSTANCE.getPlayerDataManager().getPlayer(event.getUser());
             if (player == null) return;
 
             WrapperPlayServerBlockAction blockAction = new WrapperPlayServerBlockAction(event);
             Vector3i blockPos = blockAction.getBlockPosition();
+            if (player.movementSimulation.isUnified()) {
+                var type = blockAction.getStateType();
+                if (Materials.isShulker(type) || type == StateTypes.PISTON || type == StateTypes.STICKY_PISTON) {
+                    player.movementReceipts.after(event, () -> {}, receipt -> player.compensatedWorld.blockMotion.blockAction(
+                            blockPos, type, blockAction.getActionId(), blockAction.getActionData()));
+                }
+                return;
+            }
 
             player.latencyUtils.addRealTimeTask(player.lastTransactionSent.get(), () -> {
                 // The client ignores the state sent to the client.

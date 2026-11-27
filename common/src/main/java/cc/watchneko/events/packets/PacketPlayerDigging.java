@@ -57,7 +57,7 @@ public class PacketPlayerDigging extends PacketListenerAbstract {
 
             if (itemBehaviour.canUse(item, player.compensatedWorld, player, hand)) {
                 player.packetStateData.setSlowedByUsingItem(true);
-                player.packetStateData.itemInUseHand = hand;
+                player.packetStateData.setItemInUseHand(hand);
             } else {
                 player.packetStateData.setSlowedByUsingItem(false);
             }
@@ -72,14 +72,14 @@ public class PacketPlayerDigging extends PacketListenerAbstract {
         // The food component can override the consumable component, as it provides conditions for using the item
         if (player.getClientVersion().isNewerThanOrEquals(ClientVersion.V_1_21_2) && consumable != null && foodComponent == null) {
             player.packetStateData.setSlowedByUsingItem(true);
-            player.packetStateData.itemInUseHand = hand;
+            player.packetStateData.setItemInUseHand(hand);
         }
 
         // Check for data component stuff on 1.20.5+
         if (player.getClientVersion().isNewerThanOrEquals(ClientVersion.V_1_20_5) && foodComponent != null) {
             if (foodComponent.isCanAlwaysEat() || player.food < 20 || player.gamemode == GameMode.CREATIVE) {
                 player.packetStateData.setSlowedByUsingItem(true);
-                player.packetStateData.itemInUseHand = hand;
+                player.packetStateData.setItemInUseHand(hand);
                 return;
             } else {
                 player.packetStateData.setSlowedByUsingItem(false);
@@ -105,14 +105,14 @@ public class PacketPlayerDigging extends PacketListenerAbstract {
                     || material == ItemTypes.HONEY_BOTTLE || material == ItemTypes.SUSPICIOUS_STEW ||
                     material == ItemTypes.CHORUS_FRUIT) {
                 player.packetStateData.setSlowedByUsingItem(true);
-                player.packetStateData.itemInUseHand = hand;
+                player.packetStateData.setItemInUseHand(hand);
                 return;
             }
 
             // The other items that do require it
             if (item.getType().hasAttribute(ItemTypes.ItemAttribute.EDIBLE) && ((player.platformPlayer != null && player.food < 20) || player.gamemode == GameMode.CREATIVE)) {
                 player.packetStateData.setSlowedByUsingItem(true);
-                player.packetStateData.itemInUseHand = hand;
+                player.packetStateData.setItemInUseHand(hand);
                 return;
             }
 
@@ -122,7 +122,7 @@ public class PacketPlayerDigging extends PacketListenerAbstract {
 
         if (material == ItemTypes.SHIELD && player.getClientVersion().isNewerThanOrEquals(ClientVersion.V_1_9)) {
             player.packetStateData.setSlowedByUsingItem(true);
-            player.packetStateData.itemInUseHand = hand;
+            player.packetStateData.setItemInUseHand(hand);
             return;
         }
 
@@ -139,7 +139,7 @@ public class PacketPlayerDigging extends PacketListenerAbstract {
                 && (player.getClientVersion().isNewerThanOrEquals(ClientVersion.V_1_13_2)
                 || player.getClientVersion().isOlderThanOrEquals(ClientVersion.V_1_8))) {
             player.packetStateData.setSlowedByUsingItem(item.getEnchantmentLevel(EnchantmentTypes.RIPTIDE) <= 0);
-            player.packetStateData.itemInUseHand = hand;
+            player.packetStateData.setItemInUseHand(hand);
         }
 
         // Players in survival can't use a bow without an arrow
@@ -160,12 +160,12 @@ public class PacketPlayerDigging extends PacketListenerAbstract {
 
         if (material == ItemTypes.SPYGLASS && player.getClientVersion().isNewerThanOrEquals(ClientVersion.V_1_17)) {
             player.packetStateData.setSlowedByUsingItem(true);
-            player.packetStateData.itemInUseHand = hand;
+            player.packetStateData.setItemInUseHand(hand);
         }
 
         if (material == ItemTypes.GOAT_HORN && player.getClientVersion().isNewerThanOrEquals(ClientVersion.V_1_19)) {
             player.packetStateData.setSlowedByUsingItem(true);
-            player.packetStateData.itemInUseHand = hand;
+            player.packetStateData.setItemInUseHand(hand);
         }
 
         // Only 1.8 and below players can block with swords
@@ -201,17 +201,7 @@ public class PacketPlayerDigging extends PacketListenerAbstract {
 
         if (WrapperPlayClientPlayerFlying.isFlying(event.getPacketType()) || event.getPacketType() == PacketType.Play.Client.CLIENT_TICK_END) {
             final PlayerData player = WatchNekoAPI.INSTANCE.getPlayerDataManager().getPlayer(event.getUser());
-            if (player != null && player.packetStateData.isSlowedByUsingItem()
-                    && !player.packetStateData.lastPacketWasTeleport
-                    && !player.packetStateData.lastPacketWasOnePointSeventeenDuplicate) {
-                boolean slotChanged = player.packetStateData.itemInUseHand != InteractionHand.OFF_HAND
-                        && player.packetStateData.getSlowedByUsingItemSlot() != player.packetStateData.lastSlotSelected;
-                if (slotChanged || player.inventory.getItemInHand(player.packetStateData.itemInUseHand).isEmpty()) {
-                    player.packetStateData.setSlowedByUsingItem(false);
-                    if (slotChanged)
-                        player.checkManager.getPostPredictionCheck(NoSlowA.class).didSlotChangeLastTick = true;
-                }
-            }
+            if (player != null) updateItemUseOnTick(player);
         }
 
         if (event.getPacketType() == PacketType.Play.Client.HELD_ITEM_CHANGE) {
@@ -255,6 +245,21 @@ public class PacketPlayerDigging extends PacketListenerAbstract {
             player.packetStateData.slowedByUsingItemTransaction = player.lastTransactionReceived.get();
 
             handleUseItem(player, hand);
+        }
+    }
+
+    static void updateItemUseOnTick(PlayerData player) {
+        if (!player.packetStateData.isSlowedByUsingItem()
+                || player.packetStateData.lastPacketWasTeleport
+                || player.packetStateData.lastPacketWasOnePointSeventeenDuplicate) return;
+
+        boolean slotChanged = player.packetStateData.itemInUseHand != InteractionHand.OFF_HAND
+                && player.packetStateData.getSlowedByUsingItemSlot() != player.packetStateData.lastSlotSelected;
+        if (slotChanged || player.inventory.getItemInHand(player.packetStateData.itemInUseHand).isEmpty()) {
+            player.packetStateData.setSlowedByUsingItem(false);
+            if (slotChanged) {
+                player.checkManager.getPostPredictionCheck(NoSlowA.class).didSlotChangeLastTick = true;
+            }
         }
     }
 }

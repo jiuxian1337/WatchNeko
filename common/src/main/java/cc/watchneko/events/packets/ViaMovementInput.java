@@ -5,6 +5,7 @@ import cc.watchneko.player.PlayerData;
 import com.github.retrooper.packetevents.PacketEvents;
 import com.github.retrooper.packetevents.event.PacketReceiveEvent;
 import com.github.retrooper.packetevents.exception.PacketProcessException;
+import com.github.retrooper.packetevents.manager.server.ServerVersion;
 import com.github.retrooper.packetevents.protocol.ConnectionState;
 import com.github.retrooper.packetevents.protocol.PacketSide;
 import com.github.retrooper.packetevents.protocol.packettype.PacketType;
@@ -37,7 +38,9 @@ public final class ViaMovementInput extends ChannelInboundHandlerAdapter {
             String viaDecoder = Via.getManager().getInjector().getDecoderName();
             if (pipeline.get(viaDecoder) != null && pipeline.get(NAME) == null) {
                 pipeline.addBefore(viaDecoder, NAME, new ViaMovementInput(player));
-
+                player.movementSimulation.setReadsTranslatedTickEnd(player.movementSimulation.isUnified()
+                        && player.getClientVersion().isNewerThanOrEquals(ClientVersion.V_1_21_2)
+                        && PacketEvents.getAPI().getServerManager().getVersion().isOlderThan(ServerVersion.V_1_21_2));
             }
         });
     }
@@ -46,6 +49,7 @@ public final class ViaMovementInput extends ChannelInboundHandlerAdapter {
         if (!(player.user.getChannel() instanceof Channel channel) || !channel.isOpen()) return;
         player.runSafely(() -> {
             if (channel.pipeline().get(NAME) != null) channel.pipeline().remove(NAME);
+            player.movementSimulation.setReadsTranslatedTickEnd(false);
         });
     }
 
@@ -68,6 +72,20 @@ public final class ViaMovementInput extends ChannelInboundHandlerAdapter {
         try {
             MovementInputEvent input = decode(ctx, buffer, client);
             if (input != null) {
+                if (input.getPacketType() == PacketType.Play.Client.CLIENT_TICK_END) {
+                    // ViaVersion consumes this packet on servers whose protocol has no tick-end packet.
+                    // Keep the frame valid for checks after any translated packets have been handled.
+                    buffer.retain();
+                    try {
+                        ctx.fireChannelRead(msg);
+                        PacketPlayerDigging.updateItemUseOnTick(player);
+                        CheckManagerListener.handlePlayPacket(player, input);
+                        if (input.hasPostTasks()) input.getPostTasks().forEach(Runnable::run);
+                    } finally {
+                        buffer.release();
+                    }
+                    return;
+                }
                 player.packetStateData.preViaMovementInput = false;
                 if (input.getPacketType() == PacketType.Play.Client.ENTITY_ACTION) ACTION.onPacketReceive(input);
                 else STEER.onPacketReceive(input);
@@ -90,6 +108,7 @@ public final class ViaMovementInput extends ChannelInboundHandlerAdapter {
             PacketTypeCommon type = PacketType.getById(PacketSide.CLIENT, ConnectionState.PLAY, client, id);
             if (type == PacketType.Play.Client.ENTITY_ACTION || type == PacketType.Play.Client.PLAYER_INPUT
                     || type == PacketType.Play.Client.STEER_VEHICLE
+                    || (type == PacketType.Play.Client.CLIENT_TICK_END && player.movementSimulation.readsTranslatedTickEnd())
                     || (type == PacketType.Play.Client.PLAYER_ROTATION && player.inVehicle())) {
                 return new MovementInputEvent(id, type, client, ctx, player, duplicate);
             }

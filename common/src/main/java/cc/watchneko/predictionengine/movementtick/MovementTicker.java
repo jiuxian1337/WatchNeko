@@ -47,19 +47,33 @@ public class MovementTicker {
 
         int possibleCollidingEntities = 0;
         int possibleRiptideEntities = 0;
+        int pushersBefore = 0;
+        int pushersAfter = 0;
+        boolean unified = player.movementSimulation.isUnified();
 
         // Players in vehicles do not have collisions
         if (!player.inVehicle() && player.gamemode != GameMode.SPECTATOR) {
             // Calculate the offset of the player to colliding other stuff
-            SimpleCollisionBox playerBox = GetBoundingBox.getBoundingBoxFromPosAndSize(player, player.lastX, player.lastY, player.lastZ, 0.6f, 1.8f);
-            playerBox.encompass(GetBoundingBox.getBoundingBoxFromPosAndSize(player, player.x, player.y, player.z, 0.6f, 1.8f).expand(player.getMovementThreshold()));
+            SimpleCollisionBox startBox = GetBoundingBox.getBoundingBoxFromPosAndSize(player, player.lastX, player.lastY, player.lastZ, 0.6f, 1.8f);
+            SimpleCollisionBox endBox = GetBoundingBox.getBoundingBoxFromPosAndSize(player, player.x, player.y, player.z, 0.6f, 1.8f).expand(player.getMovementThreshold());
+            SimpleCollisionBox playerBox = unified ? startBox.copy() : startBox;
+            playerBox.encompass(endBox);
             playerBox.expand(0.2);
 
             final TeamHandler teamHandler = player.checkManager.getPacketCheck(TeamHandler.class);
             final EntityTeam playerTeam = teamHandler != null ? teamHandler.getPlayerTeam() : null;
             for (PacketEntity entity : player.compensatedEntities.entityMap.values()) {
                 // TODO actually handle entity collisions instead of this awfulness
-                SimpleCollisionBox entityBox = entity.getPossibleCollisionBoxes();
+                if (unified && entity.isDead) continue;
+                SimpleCollisionBox entityBox;
+                if (unified && player.compensatedEntities.isUntrackedRider(entity)) {
+                    if (!entity.isLivingEntity) continue;
+                    entityBox = player.compensatedEntities.riderFeet(entity, 0);
+                    if (entityBox == null) continue;
+                    GetBoundingBox.expandBoundingBoxByEntityDimensions(entityBox, player, entity);
+                } else {
+                    entityBox = entity.getPossibleCollisionBoxes();
+                }
                 if (!playerBox.isCollided(entityBox)) continue;
 
                 possibleRiptideEntities++;
@@ -74,6 +88,13 @@ public class MovementTicker {
                 }
 
                 possibleCollidingEntities++;
+                if (unified) {
+                    if (entity.clientTickOrder < player.compensatedEntities.self.clientTickOrder) {
+                        if (startBox.isIntersected(entityBox)) pushersBefore++;
+                    } else if (endBox.isIntersected(entityBox)) {
+                        pushersAfter++;
+                    }
+                }
             }
         }
 
@@ -86,6 +107,7 @@ public class MovementTicker {
 
         player.uncertaintyHandler.riptideEntities.add(possibleRiptideEntities);
         player.uncertaintyHandler.collidingEntities.add(possibleCollidingEntities);
+        if (unified) player.movementSimulation.entityPushers(pushersBefore, pushersAfter);
     }
 
     private boolean isHorizontalCollisionSoft(Vector3dm collide) {
@@ -105,6 +127,8 @@ public class MovementTicker {
     }
 
     public void move(Vector3dm inputVel, Vector3dm collide) {
+        Vector3dm displacement = collide;
+        collide = player.movementSimulation.selectedTravel(displacement);
         if (player.stuckSpeedMultiplier.getX() < 0.99) {
             player.clientVelocity = new Vector3dm();
         }
@@ -186,8 +210,22 @@ public class MovementTicker {
             Collisions.handleInsideBlocks(player);
         }
 
-        player.mainSupportingBlockData = MainSupportingBlockPosFinder.findMainSupportingBlockPos(player, player.mainSupportingBlockData, new Vector3d(collide.getX(), collide.getY(), collide.getZ()), player.boundingBox, player.onGround);
-        StateType onBlock = BlockProperties.getOnPos(player, player.mainSupportingBlockData, new Vector3d(player.x, player.y, player.z));
+        Vector3d supportPosition = new Vector3d(player.x, player.y, player.z);
+        SimpleCollisionBox supportBox = player.boundingBox;
+        displacement = PredictionEngine.clampMovementToHardBorder(player, displacement);
+        boolean belowMovementThreshold = displacement.lengthSquared() <= 1e-7
+                && (player.getClientVersion().isOlderThan(ClientVersion.V_1_21_2)
+                || inputVel.lengthSquared() - displacement.lengthSquared() >= 1e-7);
+        if (belowMovementThreshold) displacement = new Vector3dm();
+        if (player.movementSimulation.isUnified()) {
+            supportPosition = new Vector3d(player.lastX + displacement.getX(), player.lastY + displacement.getY(),
+                    player.lastZ + displacement.getZ());
+            supportBox = GetBoundingBox.getCollisionBoxForPlayer(player, supportPosition.x, supportPosition.y, supportPosition.z);
+        }
+        Vector3dm supportMovement = player.movementSimulation.isUnified() ? displacement : collide;
+        player.mainSupportingBlockData = MainSupportingBlockPosFinder.findMainSupportingBlockPos(player, player.mainSupportingBlockData,
+                new Vector3d(supportMovement.getX(), supportMovement.getY(), supportMovement.getZ()), supportBox, supportPosition, player.onGround);
+        StateType onBlock = BlockProperties.getOnPos(player, player.mainSupportingBlockData, supportPosition);
 
         // Hack with 1.14+ poses issue
         if (inputVel.getY() != collide.getY()) {
@@ -214,14 +252,7 @@ public class MovementTicker {
             }
         }
 
-        collide = PredictionEngine.clampMovementToHardBorder(player, collide);
-
-        // The game disregards movements smaller than 1e-7 (such as in boats)
-        if (collide.lengthSquared() <= 1e-7
-                // New condition added in 1.21.2
-                && (player.getClientVersion().isOlderThan(ClientVersion.V_1_21_2) || inputVel.lengthSquared() - collide.lengthSquared() >= 1e-7)) {
-            collide = new Vector3dm();
-        } else if (player.getClientVersion().isNewerThanOrEquals(ClientVersion.V_1_21_5)) {
+        if (!belowMovementThreshold && player.getClientVersion().isNewerThanOrEquals(ClientVersion.V_1_21_5)) {
             Vector3d from = new Vector3d(player.lastX, player.lastY, player.lastZ);
             Vector3d to = new Vector3d(player.x, player.y, player.z);
 
@@ -229,9 +260,9 @@ public class MovementTicker {
         }
 
         // This is where vanilla moves the bounding box and sets it
-        player.predictedVelocity = new VectorData(collide.clone(), player.predictedVelocity.lastVector, player.predictedVelocity.vectorType);
+        player.predictedVelocity = new VectorData(displacement.clone(), player.predictedVelocity.lastVector, player.predictedVelocity.vectorType);
 
-        float f = BlockProperties.getBlockSpeedFactor(player, player.mainSupportingBlockData, new Vector3d(player.x, player.y, player.z));
+        float f = BlockProperties.getBlockSpeedFactor(player, player.mainSupportingBlockData, supportPosition);
         player.clientVelocity.multiply(new Vector3dm(f, 1, f));
 
         if (player.getClientVersion().isNewerThanOrEquals(ClientVersion.V_1_21_2)) {

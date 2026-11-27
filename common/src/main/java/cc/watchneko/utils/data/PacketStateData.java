@@ -33,12 +33,25 @@ public class PacketStateData {
     public boolean horseInteractCausedForcedRotation = false;
     @Getter
     private int slowedByUsingItemSlot = Integer.MIN_VALUE;
+    @Getter
+    private long itemUseRevision;
 
     public boolean isSlowedByUsingItem() {
         return slowedByUsingItemSlot != Integer.MIN_VALUE;
     }
 
     public void setSlowedByUsingItem(boolean slowedByUsingItem) {
-        slowedByUsingItemSlot = slowedByUsingItem ? lastSlotSelected : Integer.MIN_VALUE;
+        int slot = slowedByUsingItem ? lastSlotSelected : Integer.MIN_VALUE;
+        if (slot != slowedByUsingItemSlot) {
+            slowedByUsingItemSlot = slot;
+            itemUseRevision++;
+        }
+    }
+
+    public void setItemInUseHand(InteractionHand hand) {
+        if (hand != itemInUseHand) {
+            itemInUseHand = hand;
+            itemUseRevision++;
+        }
     }
 }

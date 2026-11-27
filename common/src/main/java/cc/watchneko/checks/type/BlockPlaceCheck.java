@@ -4,7 +4,7 @@ import ac.grim.grimac.api.config.ConfigManager;
 import cc.watchneko.checks.Check;
 import cc.watchneko.player.PlayerData;
 import cc.watchneko.utils.anticheat.update.BlockPlace;
-import cc.watchneko.utils.collisions.HitboxData;
+import cc.watchneko.predictionengine.MovementBlockShapes;
 import cc.watchneko.utils.collisions.datatypes.ComplexCollisionBox;
 import cc.watchneko.utils.collisions.datatypes.SimpleCollisionBox;
 import com.github.retrooper.packetevents.protocol.world.states.defaulttags.BlockTags;
@@ -66,6 +66,10 @@ public class BlockPlaceCheck extends Check implements RotationCheck, BlockBreakC
     }
 
     protected SimpleCollisionBox getCombinedBox(final BlockPlace place) {
+        return player.compensatedWorld.withSelectionSnapshot(() -> getTargetBox(place));
+    }
+
+    private SimpleCollisionBox getTargetBox(BlockPlace place) {
         // Alright, instead of skidding AACAdditionsPro, let's just use bounding boxes
         Vector3i clicked = place.position;
 
@@ -74,12 +78,10 @@ public class BlockPlaceCheck extends Check implements RotationCheck, BlockBreakC
             return new SimpleCollisionBox(clicked.getX() + 1, clicked.getY() + 1, clicked.getZ() + 1, clicked.getX(), clicked.getY(), clicked.getZ());
         }
 
-        int size = HitboxData.getBlockHitbox(
+        int size = MovementBlockShapes.interaction(
                 player,
                 place.material,
-                player.getClientVersion(),
                 player.compensatedWorld.getBlock(clicked),
-                true,
                 clicked.getX(),
                 clicked.getY(),
                 clicked.getZ()

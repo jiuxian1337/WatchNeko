@@ -200,6 +200,25 @@ public class ReachInterpolationData {
         return minimumInterpLocation;
     }
 
+    public boolean appendMovementBoxes(java.util.List<SimpleCollisionBox> boxes) {
+        int low = Math.min(interpolationStepsLowBound, cancelledLerpInterpolationStepsLowBound);
+        if (expandNonRelative || !point(targetLocation) || (low < interpolationSteps && !point(startingLocation))) return false;
+        for (int step = low; step <= interpolationStepsHighBound; step++) {
+            double fraction = (double) step / interpolationSteps;
+            double x = startingLocation.minX + (targetLocation.minX - startingLocation.minX) * fraction;
+            double y = startingLocation.minY + (targetLocation.minY - startingLocation.minY) * fraction;
+            double z = startingLocation.minZ + (targetLocation.minZ - startingLocation.minZ) * fraction;
+            var box = new SimpleCollisionBox(x, y, z, x, y, z);
+            GetBoundingBox.expandBoundingBoxByEntityDimensions(box, player, entity);
+            boxes.add(box);
+        }
+        return true;
+    }
+
+    private static boolean point(SimpleCollisionBox box) {
+        return box.minX == box.maxX && box.minY == box.maxY && box.minZ == box.maxZ;
+    }
+
     public void updatePossibleStartingLocation(SimpleCollisionBox possibleLocationCombined) {
         //WatchNekoBukkitLoaderPlugin.staticGetLogger().info(ChatColor.BLUE + "Updated new starting location as second trans hasn't arrived " + startingLocation);
         this.startingLocation = combineCollisionBox(startingLocation, possibleLocationCombined);

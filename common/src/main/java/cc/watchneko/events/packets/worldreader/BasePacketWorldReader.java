@@ -64,7 +64,11 @@ public class BasePacketWorldReader extends PacketListenerAbstract {
             if (player == null) return;
 
             WrapperPlayServerAcknowledgeBlockChanges changes = new WrapperPlayServerAcknowledgeBlockChanges(event);
-            player.compensatedWorld.handlePredictionConfirmation(changes.getSequence());
+            if (player.movementSimulation.isUnified()) {
+                player.movementReceipts.after(event, () -> {}, receipt -> player.compensatedWorld.handlePredictionConfirmation(changes.getSequence()));
+            } else {
+                player.compensatedWorld.handlePredictionConfirmation(changes.getSequence());
+            }
         }
 
         if (event.getPacketType() == PacketType.Play.Server.ACKNOWLEDGE_PLAYER_DIGGING) {
@@ -72,7 +76,12 @@ public class BasePacketWorldReader extends PacketListenerAbstract {
             if (player == null) return;
 
             WrapperPlayServerAcknowledgePlayerDigging ack = new WrapperPlayServerAcknowledgePlayerDigging(event);
-            player.compensatedWorld.handleBlockBreakAck(ack.getBlockPosition(), ack.getBlockId(), ack.getAction(), ack.isSuccessful());
+            if (player.movementSimulation.isUnified()) {
+                player.movementReceipts.after(event, () -> {}, receipt -> player.compensatedWorld.handleBlockBreakAck(
+                        ack.getBlockPosition(), ack.getBlockId(), ack.getAction(), ack.isSuccessful()));
+            } else {
+                player.compensatedWorld.handleBlockBreakAck(ack.getBlockPosition(), ack.getBlockId(), ack.getAction(), ack.isSuccessful());
+            }
         }
 
         if (event.getPacketType() == PacketType.Play.Server.CHANGE_GAME_STATE) {
@@ -81,15 +90,19 @@ public class BasePacketWorldReader extends PacketListenerAbstract {
 
             WrapperPlayServerChangeGameState newState = new WrapperPlayServerChangeGameState(event);
 
-            player.latencyUtils.addRealTimeTask(player.lastTransactionSent.get(), () -> {
-                if (newState.getReason() == WrapperPlayServerChangeGameState.Reason.BEGIN_RAINING) {
-                    player.compensatedWorld.isRaining = true;
-                } else if (newState.getReason() == WrapperPlayServerChangeGameState.Reason.END_RAINING) {
-                    player.compensatedWorld.isRaining = false;
-                } else if (newState.getReason() == WrapperPlayServerChangeGameState.Reason.RAIN_LEVEL_CHANGE) {
-                    player.compensatedWorld.isRaining = newState.getValue() > 0.2f;
-                }
-            });
+            var reason = newState.getReason();
+            if (reason != WrapperPlayServerChangeGameState.Reason.BEGIN_RAINING
+                    && reason != WrapperPlayServerChangeGameState.Reason.END_RAINING
+                    && reason != WrapperPlayServerChangeGameState.Reason.RAIN_LEVEL_CHANGE) return;
+
+            boolean raining = reason == WrapperPlayServerChangeGameState.Reason.BEGIN_RAINING
+                    || reason == WrapperPlayServerChangeGameState.Reason.RAIN_LEVEL_CHANGE && newState.getValue() > 0.2f;
+            Runnable updateWeather = () -> player.compensatedWorld.isRaining = raining;
+            if (player.movementSimulation.isUnified()) {
+                player.movementReceipts.after(event, () -> {}, receipt -> updateWeather.run());
+            } else {
+                player.latencyUtils.addRealTimeTask(player.lastTransactionSent.get(), updateWeather);
+            }
         }
     }
 
@@ -109,6 +122,10 @@ public class BasePacketWorldReader extends PacketListenerAbstract {
 
     public void addChunkToCache(PacketSendEvent event, PlayerData player, BaseChunk[] chunks, boolean isGroundUp, int chunkX, int chunkZ) {
         BaseChunk[] sections = ChunkSectionPool.shareSections(CompensatedWorld.blockVersion, chunks);
+        if (player.movementSimulation.isUnified()) {
+            player.compensatedWorld.trackServerColumn(event, chunkX, chunkZ, sections, isGroundUp);
+            return;
+        }
         double chunkCenterX = (chunkX << 4) + 8;
         double chunkCenterZ = (chunkZ << 4) + 8;
         boolean shouldPostTrans = Math.abs(player.x - chunkCenterX) < 16 && Math.abs(player.z - chunkCenterZ) < 16;
@@ -143,7 +160,11 @@ public class BasePacketWorldReader extends PacketListenerAbstract {
     }
 
     protected void unloadChunk(PacketSendEvent event, PlayerData player, int x, int z) {
-        player.compensatedWorld.removeChunkLater(x, z);
+        if (player.movementSimulation.isUnified()) {
+            player.compensatedWorld.trackServerColumn(event, x, z, null, true);
+        } else {
+            player.compensatedWorld.removeChunkLater(x, z);
+        }
     }
 
     public void handleBlockChange(PlayerData player, PacketSendEvent event) {
@@ -151,6 +172,11 @@ public class BasePacketWorldReader extends PacketListenerAbstract {
         int range = 16;
 
         Vector3i blockPosition = blockChange.getBlockPosition();
+        if (player.movementSimulation.isUnified()) {
+            player.compensatedWorld.trackServerBlocks(event,
+                    java.util.List.of(new CompensatedWorld.SentBlock(blockPosition, blockChange.getBlockId())));
+            return;
+        }
         // Don't spam transactions (block changes are sent in batches)
         if (Math.abs(blockPosition.getX() - player.x) < range && Math.abs(blockPosition.getY() - player.y) < range && Math.abs(blockPosition.getZ() - player.z) < range &&
                 player.lastTransSent + 2 < System.currentTimeMillis())
@@ -165,6 +191,14 @@ public class BasePacketWorldReader extends PacketListenerAbstract {
         int range = 16;
 
         final var blocks = multiBlockChange.getBlocks();
+        if (player.movementSimulation.isUnified()) {
+            var changes = new java.util.ArrayList<CompensatedWorld.SentBlock>(blocks.length);
+            for (var block : blocks) {
+                changes.add(new CompensatedWorld.SentBlock(new Vector3i(block.getX(), block.getY(), block.getZ()), block.getBlockId()));
+            }
+            if (!changes.isEmpty()) player.compensatedWorld.trackServerBlocks(event, changes);
+            return;
+        }
         for (WrapperPlayServerMultiBlockChange.EncodedBlock blockChange : blocks) {
             // Don't send a transaction unless it's within 16 blocks of the player
             if (Math.abs(blockChange.getX() - player.x) < range && Math.abs(blockChange.getY() - player.y) < range && Math.abs(blockChange.getZ() - player.z) < range && player.lastTransSent + 2 < System.currentTimeMillis()) {
