@@ -829,7 +829,7 @@ AnalysisA:
 | `AnalysisE` | 连续旋转增量共享同一个公约数 | **否** | 4000 ms |
 | `AnalysisF` | 六十个样本里离群值与重复值都过少 | **否** | 4000 ms |
 | `AnalysisG` | 一百个样本里出现重复的增量序列 | 是 | 5000 ms |
-| `AnalysisH` | 一次大幅旋转夹在两次小幅旋转之间 | 是 | — |
+| `AnalysisH` | 攻击包附近的孤立大幅 yaw 转动 | 是 | — |
 | `AnalysisI` | 增量向量角度连续三次完全相同 | 是 | — |
 | `AnalysisJ` | 二十五次旋转窗口的统计量（IQR、z 值、机器人模式、不可能值） | 是 | — |
 | `AnalysisK` | `AnalysisJ` 的 IQR 累积 | 是 | — |

@@ -6,42 +6,35 @@ import cc.watchneko.checks.Check;
 import cc.watchneko.checks.CheckData;
 import cc.watchneko.checks.type.RotationCheck;
 import cc.watchneko.player.PlayerData;
+import cc.watchneko.utils.anticheat.CombatPackets;
 import cc.watchneko.utils.anticheat.update.RotationUpdate;
 import cc.watchneko.utils.lists.EvictingList;
+import cc.watchneko.utils.math.MathUtil;
 import cc.watchneko.utils.math.Simplification;
-import cc.watchneko.utils.math.Statistics;
+import com.github.retrooper.packetevents.event.PacketReceiveEvent;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
- * Factor analysis from MX's {@code AimFactorCheck}: three consecutive yaw deltas around one huge rotation,
- * where the middle value is large but the neighbours are not — a snap onto a target rather than a turn.
- *
- * <p>This is the only heuristic that consumes ticks with no rotation. A player who aims, holds still,
- * then flicks produces a triple whose middle element is a zero, and without the no-rotation tick the two
- * rotations would look adjacent. Upstream emits a synthetic zero-rotation event for that; this build
- * overrides {@link RotationCheck#onNoRotation()} to get the same input.
+ * Scores isolated large yaw deltas near an attack. Position changes without a look update
+ * supply a zero yaw sample through {@link RotationCheck#onNoRotation()}.
  */
 @CheckData(
         name = "AnalysisH",
         configName = "AnalysisH",
-        description = "isolated large rotation between two small ones",
+        description = "isolated large yaw turn alongside an attack",
         decay = 0.05
 )
 public final class AnalysisH extends Check implements RotationCheck {
 
     private static final double HUGE_ROTATION = 35;
     private static final double SMALL_NEIGHBOUR = 1.2;
+    private static final long MAX_GAP = TimeUnit.MILLISECONDS.toNanos(250);
+    private static final long COMBAT_IDLE = TimeUnit.MILLISECONDS.toNanos(3500);
 
-    private final List<Double> stack = new EvictingList<>(3);
-
-    private boolean lastWasNoRotation;
-    private double lastHash;
-    private float buffer;
-    private int ticksToReset;
-
-    private float bufferLimit = 3.0f;
-    private int resetAfterTicks = 2500;
+    private final Window window = new Window();
+    private volatile Settings settings;
 
     public AnalysisH(final PlayerData player) {
         super(player);
@@ -49,72 +42,136 @@ public final class AnalysisH extends Check implements RotationCheck {
 
     @Override
     public void onReload(final ConfigManager config) {
-        bufferLimit = (float) config.getDoubleElse("AnalysisH.buffer", bufferLimit);
-        resetAfterTicks = config.getIntElse("AnalysisH.ticks-to-reset", resetAfterTicks);
+        settings = new Settings((float) config.getDoubleElse("AnalysisH.buffer", 3.0),
+                config.getIntElse("AnalysisH.ticks-to-reset", 2500));
     }
 
     @Override
     public void process(final RotationUpdate update) {
-        if (AimHeuristicGate.blocks(player)) {
+        if (AimHeuristicGate.dropRotation(player, update) || !canSample()) {
+            window.reset();
             return;
         }
-        if (AimHeuristicGate.noPitchChange(update)) {
-            // A rotation that only moved the yaw is treated as no rotation at all, exactly as upstream does.
-            noRotation();
-            return;
-        }
-        final float deltaYaw = Math.abs(Math.abs(update.getTo().getYaw()) - Math.abs(update.getFrom().getYaw()));
-        stack.add(Simplification.scaleVal(deltaYaw, 2));
-        check();
-        lastWasNoRotation = false;
+        report(window.rotation(update, player.rotationSequence.position(), System.nanoTime(), settings));
     }
 
     @Override
     public void onNoRotation() {
-        if (AimHeuristicGate.blocksNoRotation(player)) {
+        if (AimHeuristicGate.blocksNoRotation(player) || !canSample()) {
+            window.reset();
             return;
         }
-        noRotation();
+        report(window.sample(0, player.rotationSequence.position(), System.nanoTime(), settings));
     }
 
-    private void noRotation() {
-        if (!lastWasNoRotation) stack.add(0.0);
-        check();
-        lastWasNoRotation = true;
-    }
-
-    private void check() {
-        if (stack.size() != 3) return;
-
-        double hash = stack.get(0) + stack.get(1) + stack.get(2);
-        if (hash == lastHash) return;
-
-        double centre = stack.get(1);
-        boolean hugeRotation = centre > HUGE_ROTATION;
-
-        if (hugeRotation && centre != 360.0f) {
-            boolean invalid = (stack.get(0) < SMALL_NEIGHBOUR && stack.get(2) < SMALL_NEIGHBOUR)
-                    || (stack.get(0) > 55 && stack.get(1) < 2 && stack.get(2) > 55)
-                    || Statistics.getMax(stack) > 70 && Statistics.getMin(stack) < SMALL_NEIGHBOUR
-                    && Statistics.getDistinct(stack) != 3;
-
-            if (invalid) {
-                float localVl = (centre > 160) ? 3 : (centre < 60) ? 1 : 2;
-                buffer += localVl;
-                if (buffer >= bufferLimit) {
-                    // Adds VL but does not block attacks upstream, so there is no mitigation here either.
-                    flagAndAlert("factor analysis (" + centre + "/"
-                            + Simplification.scaleVal(stack.get(0) + stack.get(2), 2) + ")");
-                    buffer = bufferLimit - 1;
-                }
-            }
-        } else {
-            ticksToReset++;
-            if (ticksToReset >= resetAfterTicks) {
-                ticksToReset = 0;
-                buffer = 0;
-            }
+    @Override
+    public void onPacketReceive(PacketReceiveEvent event) {
+        if (event.isCancelled() || CombatPackets.attackTarget(event) < 0) return;
+        if (AimHeuristicGate.blocksNoRotation(player) || !canSample() || player.inVehicle()) {
+            window.reset();
+            return;
         }
-        lastHash = hash;
+        report(window.attack(player.rotationSequence.position(), System.nanoTime(), settings));
+    }
+
+    private boolean canSample() {
+        return isEnabled() && !isExemptPermission() && !player.disableGrim;
+    }
+
+    private void report(Candidate match) {
+        if (match != null) flagAndAlert("factor analysis (" + match.centre().yaw() + "/"
+                + Simplification.scaleVal(match.neighbours(), 2) + ")");
+    }
+
+    record Settings(float bufferLimit, int resetAfterTicks) {}
+
+    record Candidate(Sample centre, double neighbours) {}
+
+    private record Sample(double yaw, long sequence, long time) {}
+
+    static final class Window {
+        private final List<Sample> samples = new EvictingList<>(3);
+        private Candidate candidate;
+        private long attackSequence = -1;
+        private long attackTime;
+        private double lastHash;
+        private float buffer;
+        private int ticksToReset;
+
+        Candidate rotation(RotationUpdate update, long sequence, long now, Settings settings) {
+            double yaw = Math.abs(MathUtil.getAngleDifference(update.getTo().getYaw(), update.getFrom().getYaw()));
+            return sample(yaw, sequence, now, settings);
+        }
+
+        Candidate sample(double yaw, long sequence, long now, Settings settings) {
+            if (!samples.isEmpty()) {
+                Sample previous = samples.get(samples.size() - 1);
+                if (now - previous.time() > MAX_GAP) clearSamples();
+                else if (yaw == 0 && previous.yaw() == 0) return null;
+            }
+            samples.add(new Sample(Simplification.scaleVal(yaw, 2), sequence, now));
+            candidate = null;
+            if (samples.size() != 3) return null;
+
+            Sample left = samples.get(0);
+            Sample centre = samples.get(1);
+            double right = samples.get(2).yaw();
+            double hash = left.yaw() + centre.yaw() + right;
+            if (hash == lastHash) return null;
+            lastHash = hash;
+
+            if (centre.yaw() <= HUGE_ROTATION) {
+                if (++ticksToReset >= settings.resetAfterTicks()) resetBuffer();
+                return null;
+            }
+            boolean isolated = left.yaw() < SMALL_NEIGHBOUR && right < SMALL_NEIGHBOUR;
+            boolean repeatedLarge = (left.yaw() == centre.yaw() || left.yaw() == right || centre.yaw() == right)
+                    && Math.max(centre.yaw(), Math.max(left.yaw(), right)) > 70
+                    && Math.min(left.yaw(), right) < SMALL_NEIGHBOUR;
+            if (isolated || repeatedLarge) {
+                candidate = new Candidate(centre, left.yaw() + right);
+            }
+            return score(now, settings);
+        }
+
+        Candidate attack(long sequence, long now, Settings settings) {
+            if (attackSequence >= 0 && now - attackTime > COMBAT_IDLE) resetBuffer();
+            attackSequence = sequence;
+            attackTime = now;
+            return score(now, settings);
+        }
+
+        private Candidate score(long now, Settings settings) {
+            if (candidate == null || attackSequence < 0) return null;
+            Sample centre = candidate.centre();
+            // The attack can precede the look packet or follow it before the next look update.
+            if (attackSequence < centre.sequence() - 1 || attackSequence > centre.sequence()
+                    || Math.abs(attackTime - centre.time()) > MAX_GAP || now - centre.time() > MAX_GAP) return null;
+
+            Candidate match = candidate;
+            candidate = null;
+            double yaw = centre.yaw();
+            buffer += yaw > 160 ? 3 : yaw < 60 ? 1 : 2;
+            if (buffer < settings.bufferLimit()) return null;
+            buffer = settings.bufferLimit() - 1;
+            return match;
+        }
+
+        void reset() {
+            clearSamples();
+            resetBuffer();
+            attackSequence = -1;
+        }
+
+        private void clearSamples() {
+            samples.clear();
+            candidate = null;
+            lastHash = 0;
+        }
+
+        private void resetBuffer() {
+            ticksToReset = 0;
+            buffer = 0;
+        }
     }
 }
