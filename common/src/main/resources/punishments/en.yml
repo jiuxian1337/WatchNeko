@@ -212,6 +212,20 @@ Punishments:
         commands:
             - "1:1 [log]"
             - "1:1 [alert]"
+    AimY:
+        remove-violations-after: 300
+        checks:
+            - "AimY"
+        commands:
+            - "1:1 [log]"
+            - "1:1 [alert]"
+    AimZ:
+        remove-violations-after: 300
+        checks:
+            - "AimZ"
+        commands:
+            - "1:1 [log]"
+            - "1:1 [alert]"
     Baritone:
         remove-violations-after: 300
         checks:

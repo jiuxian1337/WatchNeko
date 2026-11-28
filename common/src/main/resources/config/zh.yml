@@ -487,6 +487,15 @@ AimS:
 AimX:
     enabled: true
 
+# 针对原生 Java 1.8 PvP 的实验性瞄准检查。
+AimY:
+    enabled: false
+    debug-log: false
+
+AimZ:
+    enabled: false
+    debug-log: false
+
 AnalysisA:
     # 云端旋转检测。插件只负责采样与特征提取，判定由云端给出。
     # 云端裁决只累加 VL——是否真的惩罚仍由本文件的 analysis-window-size 与 min-cheat-votes、

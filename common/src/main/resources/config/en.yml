@@ -482,6 +482,15 @@ AimS:
 AimX:
     enabled: true
 
+# Experimental aim checks for native Java 1.8 PvP.
+AimY:
+    enabled: false
+    debug-log: false
+
+AimZ:
+    enabled: false
+    debug-log: false
+
 AnalysisA:
     # Cloud-assisted rotation detection. The plugin only samples and extracts features; the verdict comes
     # from the cloud. Cloud verdicts only ever add VL - whether that becomes a punishment is still decided

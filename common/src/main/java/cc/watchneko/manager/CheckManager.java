@@ -117,6 +117,7 @@ public class CheckManager {
     private PacketReceiveEvent rejectedByExperimentalCrash;
 
     private final XRayProcessor xRay;
+    private final AimTrajectorySampler aimTrajectory;
 
     public CheckManager(PlayerData player) {
         this.player = player;
@@ -372,6 +373,8 @@ public class CheckManager {
                 .put(Baritone.class, new Baritone(player))
                 .put(ChestStealer.class, new ChestStealer(player))
                 .put(ScaffoldF.class, new ScaffoldF(player))
+                .put(AimY.class, new AimY(player))
+                .put(AimZ.class, new AimZ(player))
                 .put(XRayA.class, new XRayA(player))
                 .put(XRayB.class, new XRayB(player))
                 .put(XRayC.class, new XRayC(player))
@@ -399,6 +402,7 @@ public class CheckManager {
                 .build();
 
         xRay = new XRayProcessor(player, getCheck(XRayA.class), getCheck(XRayB.class), getCheck(XRayC.class));
+        aimTrajectory = new AimTrajectorySampler(player, getCheck(AimY.class), getCheck(AimZ.class));
         init();
     }
 
@@ -469,6 +473,11 @@ public class CheckManager {
         for (RotationCheck check : rotationChecks.values()) {
             check.onPacketReceive(packet);
         }
+        aimTrajectory.onPacketReceive(packet);
+    }
+
+    public void onUncertainAimTick() {
+        aimTrajectory.onUncertainTick();
     }
 
     public void onPacketSend(final PacketSendEvent packet) {

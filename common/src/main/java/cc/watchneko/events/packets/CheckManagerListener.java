@@ -649,7 +649,10 @@ public class CheckManagerListener extends PacketListenerAbstract {
     public void onPacketReceive(PacketReceiveEvent event) {
         PlayerData player = WatchNekoAPI.INSTANCE.getPlayerDataManager().getPlayer(event.getUser());
         if (player == null) return;
-        if (player.checkManager.wasRejectedByExperimentalCrash(event)) return;
+        if (player.checkManager.wasRejectedByExperimentalCrash(event)) {
+            if (WrapperPlayClientPlayerFlying.isFlying(event.getPacketType())) player.checkManager.onUncertainAimTick();
+            return;
+        }
 
         if (event.getConnectionState() != ConnectionState.PLAY) {
             // Allow checks to listen to configuration packets
@@ -666,6 +669,7 @@ public class CheckManagerListener extends PacketListenerAbstract {
         if (event.isCancelled()
                 && WrapperPlayClientPlayerFlying.isFlying(event.getPacketType())) {
             player.checkManager.getCheck(PacketOrderP.class).onUncertainTick();
+            player.checkManager.onUncertainAimTick();
             return;
         }
 
@@ -734,6 +738,7 @@ public class CheckManagerListener extends PacketListenerAbstract {
         if (event.isCancelled() && (WrapperPlayClientPlayerFlying.isFlying(event.getPacketType()) || event.getPacketType() == PacketType.Play.Client.VEHICLE_MOVE)) {
             player.packetStateData.cancelDuplicatePacket = false;
             player.checkManager.getCheck(PacketOrderP.class).onUncertainTick();
+            player.checkManager.onUncertainAimTick();
             player.packetStateData.lastPacketWasOnePointSeventeenDuplicate = false;
             player.packetStateData.lastPacketWasTeleport = false;
             return;
